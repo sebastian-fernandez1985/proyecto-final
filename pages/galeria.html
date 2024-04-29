@@ -1,0 +1,118 @@
+!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>galeria</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+
+    <link rel="stylesheet" href="../css/estilo.css">
+    <style>
+        ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        li {
+            display: inline;
+
+            margin-right: 100px;
+
+        }
+
+
+        li a {
+            text-decoration: none;
+            color: black;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navegador">
+        <ul>
+            <li><a href="../index.html">inicio</a></li>
+            <li><a href="./nosotros.html">nosotros</a></li>
+            <li><a href="./galeria.html">galeria</a></li>
+            <li><a href="./servicios.html">servicios</a></li>
+            <li><a href="./contactos.html">contactos</a></li>
+        </ul>
+    </nav>
+    <main class="main-galeria">
+        <h1>galeria</h1>
+
+        <section class="grid-galeria">
+            <div class="img-1">
+                <img src="https://media.istockphoto.com/id/1363734940/es/foto/tres-cajas-de-cart%C3%B3n.jpg?s=612x612&w=0&k=20&c=F3Dby9iUDKLxW3QgrVCwFVm5RGl1F0HSHSk_8MDUi1o="
+                    alt="cajas">
+            </div>
+            <div class="img-2">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTf2b4_119Xup46s2-IPuKLrY8weyqX9KLv5A&usqp=CAU"
+                    alt="celu">
+            </div>
+            <div class="img-3">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcStywZwS-yF9Bobci7mz6DCTcmChJQ1NiXViw&usqp=CAU"
+                    alt="comtrol">
+            </div>
+            <div class="img-4">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ8IDiU-05sF91s3eskjosfL_JkZwPCpkjpsQ&usqp=CAU"
+                    alt="equipo">
+            </div>
+            <div class="img-5">
+                <img src="https://img.freepik.com/foto-gratis/primer-plano-mensajero-que-adjunta-etiqueta-direccion-paquete-mientras-trabaja-oficina_637285-6592.jpg?size=626&ext=jpg&ga=GA1.1.1297763733.1711584000&semt=sph"
+                    alt="caja">
+
+            </div>
+            <div class="img-6">
+                <img src="https://www.shutterstock.com/image-photo/young-hispanic-man-holding-delivery-260nw-1824634994.jpg"
+                    alt="entrega">
+            </div>
+            <div id="carouselExampleIndicators" class="carousel slide">
+                <div class="carousel-indicators">
+                    <button type="button" data-bs-target="#carouselExampleIndicators" data-bs-slide-to="0"
+                        class="active" aria-current="true" aria-label="Slide 1"></button>
+                    <button type="button" data-bs-target="#carouselExampleIndicators" data-bs-slide-to="1"
+                        aria-label="Slide 2"></button>
+                    <button type="button" data-bs-target="#carouselExampleIndicators" data-bs-slide-to="2"
+                        aria-label="Slide 3"></button>
+                </div>
+                <div class="carousel-inner">
+                    <div class="carousel-item active">
+                        <img src="../recursos/Web service.jpg" class="d-block w-100" alt="...">
+                    </div>
+                    <div class="carousel-item">
+                        <img src="../recursos/Optimizacion de rutas.jpg" class="d-block w-100" alt="...">
+                    </div>
+                    <div class="carousel-item">
+                        <img src="../recursos/Tecnologia mobile.jpg" class="d-block w-100" alt="...">
+                    </div>
+                </div>
+                <button class="carousel-control-prev" type="button" data-bs-target="#carouselExampleIndicators"
+                    data-bs-slide="prev">
+                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Previous</span>
+                </button>
+                <button class="carousel-control-next" type="button" data-bs-target="#carouselExampleIndicators"
+                    data-bs-slide="next">
+                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Next</span>
+                </button>
+            </div>
+        </section>
+    </main>
+    <footer class="footer"><a href="whatsapp://send?phone=+5491568750024&text=Hola,%20¿cómo%20estás?">
+            <img src="../recursos/icono-wasap.avif" alt="WhatsApp Icon" width="50" height="50"></a>
+        <a href="mailto:maximiliano.saavedra@fixy.com.ar">
+            <img src="../recursos/imagen-mail.png" alt="Icono de correo" width="50" height="50">
+        </a>
+    </footer>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"></script>
+
+</body>
+
+</html>
