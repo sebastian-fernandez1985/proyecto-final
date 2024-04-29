@@ -1,0 +1,22 @@
+.header nav {
+    background-color: $celefixy;
+    color: red;
+
+    font-family: $fuente-titulo;
+
+    ul {
+        list-style-type: none;
+        background-color: $celefixy;
+
+        li {
+            a {
+                color: $amarifixy;
+                text-decoration: none;
+            }
+        }
+    }
+}
+.navbar-nav .nav-link.active,
+.navbar-nav .nav-link.show {
+    color: $amarifixy;
+}

@@ -4,3 +4,143 @@
   padding: 0;
   font-family: "Lato", sans-serif;
   box-sizing: border-box; }
+
+.header nav {
+  background-color: #1877F2;
+  color: red;
+  font-family: "Rubik Distressed", system-ui; }
+  .header nav ul {
+    list-style-type: none;
+    background-color: #1877F2; }
+    .header nav ul li a {
+      color: #F5C33B;
+      text-decoration: none; }
+
+.navbar-nav .nav-link.active,
+.navbar-nav .nav-link.show {
+  color: #F5C33B; }
+
+.main-index h1 {
+  text-align: center;
+  color: #1877F2;
+  font-family: "Rubik Distressed", system-ui;
+  background-color: blanchedalmond;
+  position: sticky;
+  top: 0;
+  width: 100%; }
+
+.zoom-bazar {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-evenly;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: center; }
+  .zoom-bazar .zoom {
+    border: gray solid 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: monospace;
+    box-shadow: 1px 1px 5px 1px gray;
+    border-radius: 15px;
+    padding: 10px;
+    padding-bottom: 10px;
+    margin: 2px; }
+    .zoom-bazar .zoom img {
+      height: 150px; }
+    .zoom-bazar .zoom .button {
+      padding: 5px;
+      margin: 5px;
+      border-radius: 5px;
+      background-color: black;
+      color: aliceblue;
+      font-family: sans-serif; }
+
+.celulares {
+  border: #1a21e4 solid 2px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+  justify-items: center;
+  justify-content: center;
+  align-content: center;
+  background-color: #c6cbc9;
+  padding: 15px; }
+  .celulares div {
+    border: black solid 3px;
+    border-radius: 20px;
+    margin: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 150px;
+    padding: 8px;
+    box-shadow: 2px 2px 2px 2px green; }
+    .celulares div img {
+      height: 150px; }
+    .celulares div p {
+      font-size: 1rem; }
+
+.bg-body-tertiary {
+  --bs-bg-opacity: 1;
+  background-color: #1877F2 !important; }
+  .bg-body-tertiary a {
+    color: #F5C33B; }
+
+@media (max-width: 780px) {
+  h1 {
+    background-color: aqua;
+    font-family: "Rubik Distressed", system-ui;
+    width: 100%; }
+  .celulares {
+    grid-template-columns: repeat(2, 1fr); } }
+
+@media (max-width: 375px) {
+  .celulares {
+    grid-template-columns: 1fr; } }
+
+.footer {
+  background-color: black;
+  display: flex;
+  justify-content: space-evenly; }
+
+.main-contactos .redes {
+  display: flex;
+  justify-content: space-around;
+  flex-direction: row; }
+
+.fondo-papel {
+  background-image: url("https://img.freepik.com/foto-gratis/textura-papel-rosa-arrugado_23-2147786574.jpg?w=360&t=st=1710956215~exp=1710956815~hmac=5616f0f32d284b7226d2a0e6a099fa722ced3a27166a169fab8eca06c2e79f2a"); }
+
+.main-pf div {
+  border: solid grey 1px;
+  padding: 10px; }
+
+.main-pf a {
+  display: inline-block;
+  padding: 10px;
+  font-family: "Parisienne", cursive;
+  background-color: azure;
+  color: #0a0a3c; }
+
+.main-pf a:hover {
+  font-weight: bold;
+  padding: 20px;
+  background-color: #0a0a3c;
+  color: azure; }
+
+.main-pf a:active {
+  background-color: yellow;
+  color: black; }
+
+.main-pf a:visited {
+  background-color: darkslategrey;
+  color: #999; }
+
+.main-pf div:not(.padre) {
+  padding-left: 40px; }
+
+.padre div:nth-child(1) {
+  font-weight: bold;
+  color: orange; }

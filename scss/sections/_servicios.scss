@@ -1,0 +1,43 @@
+.main-pf div {
+    border: solid grey 1px;
+    padding: 10px;
+}
+
+
+.main-pf a {
+
+    display: inline-block;
+    padding: 10px;
+    font-family: $fuente-secundaria;
+    background-color: azure;
+    color: #0a0a3c;
+}
+
+.main-pf a:hover {
+
+    font-weight: bold;
+    padding: 20px;
+    background-color: #0a0a3c;
+    color: azure;
+}
+
+.main-pf a:active {
+
+    background-color: yellow;
+    color: black;
+}
+
+.main-pf a:visited {
+
+    background-color: darkslategrey;
+    color: #999;
+}
+
+.main-pf div:not(.padre) {
+    padding-left: 40px;
+}
+
+.padre div:nth-child(1) {
+    font-weight: bold;
+    color: orange;
+}
