@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIXY · Control de Despacho</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b1118; --panel:#141d28; --panel-2:#0f1722; --line:#243140;
+    --txt:#eef2f6; --muted:#8a99a8; --muted-2:#5d6e7d;
+    --brand:#22d3ee; --ok:#1db954; --ok-bg:#0e3b22;
+    --warn:#f5a623; --warn-bg:#3b2c0a; --err:#ef4444; --err-bg:#3b1414;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;min-height:100vh}
+  .hidden{display:none!important}
+  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+  .logo{font-family:'Space Grotesk';font-weight:700;letter-spacing:.5px;font-size:20px}
+  .logo b{color:var(--brand)}
+  .crumb{color:var(--muted);font-size:13px;font-weight:500}
+  .hdr-right{margin-left:auto;display:flex;gap:22px;flex-wrap:wrap;align-items:center}
+  .hdr-right .meta{display:flex;flex-direction:column;line-height:1.2}
+  .hdr-right .meta span{font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.6px}
+  .hdr-right .meta strong{font-family:'Space Grotesk';font-size:15px;font-weight:600}
+  .conn{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted-2)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(29,185,84,.18)}
+
+  /* ===== VISTA IMPORTAR ===== */
+  #view-import{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+  .imp{width:100%;max-width:620px;text-align:center}
+  .imp h1{font-family:'Space Grotesk';font-weight:600;font-size:30px;margin:0 0 6px}
+  .imp p{color:var(--muted);margin:0 0 26px;font-size:15px}
+  .drop{border:2px dashed var(--line);border-radius:18px;padding:46px 24px;cursor:pointer;transition:.15s;background:var(--panel)}
+  .drop:hover,.drop.over{border-color:var(--brand);background:#10202a}
+  .drop .ico{font-size:42px;line-height:1;margin-bottom:14px;color:var(--brand)}
+  .drop .big{font-family:'Space Grotesk';font-weight:600;font-size:18px}
+  .drop .small{color:var(--muted-2);font-size:13px;margin-top:6px}
+  .imp-note{margin-top:16px;font-size:12px;color:var(--muted-2)}
+  .imp-note b{color:var(--brand)}
+  .errors{margin-top:18px;text-align:left;background:var(--err-bg);border:1px solid var(--err);
+    border-radius:12px;padding:14px 16px;max-height:220px;overflow:auto}
+  .errors h3{margin:0 0 8px;font-size:13px;font-family:'Space Grotesk';color:#ffb4b4;text-transform:uppercase;letter-spacing:.5px}
+  .errors div{font-size:13px;color:#ffd5d5;padding:2px 0}
+
+  /* ===== VISTA LISTA ===== */
+  #view-list{flex:1;padding:22px 20px}
+  .list-head{display:flex;align-items:center;margin-bottom:18px;gap:14px;flex-wrap:wrap}
+  .list-head h2{font-family:'Space Grotesk';font-weight:600;font-size:22px;margin:0}
+  .list-head .sub{color:var(--muted);font-size:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+  .pl-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;display:flex;flex-direction:column;gap:4px}
+  .pl-card .trans{font-family:'Space Grotesk';font-weight:600;font-size:17px}
+  .pl-card .id{font-family:'JetBrains Mono';font-size:13px;color:var(--brand)}
+  .pl-card .zf{font-size:13px;color:var(--muted);margin-top:2px}
+  .pl-card .stats{display:flex;gap:18px;margin:12px 0 14px}
+  .pl-card .stats div{display:flex;flex-direction:column;line-height:1.1}
+  .pl-card .stats .n{font-family:'JetBrains Mono';font-weight:700;font-size:22px}
+  .pl-card .stats .l{font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px}
+  .badge{align-self:flex-start;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.5px}
+  .badge.pend{background:#1c2733;color:var(--muted)}
+  .badge.done{background:var(--ok-bg);color:var(--ok)}
+  .ctrl-btn{margin-top:auto;border:none;border-radius:11px;padding:13px;cursor:pointer;
+    font-family:'Space Grotesk';font-weight:700;font-size:15px;background:var(--brand);color:#04222a;transition:.15s}
+  .ctrl-btn:hover{filter:brightness(1.06)}
+  .ctrl-btn.done{background:#1c2733;color:var(--muted-2);cursor:default}
+
+  /* ===== VISTA CONTROL ===== */
+  .feedback{margin:18px 20px 0;border-radius:var(--radius);padding:22px 26px;display:flex;align-items:center;gap:20px;
+    min-height:96px;border:1px solid var(--line);background:var(--panel);transition:background .15s,border-color .15s}
+  .feedback .icon{width:60px;height:60px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+    font-size:32px;font-weight:700;background:#1c2733;color:var(--muted)}
+  .feedback .msg{font-family:'Space Grotesk';font-size:26px;font-weight:600;line-height:1.15}
+  .feedback .sub{color:var(--muted);font-size:14px;margin-top:3px}
+  .feedback.ok{background:var(--ok-bg);border-color:var(--ok)} .feedback.ok .icon{background:var(--ok);color:#04230f}
+  .feedback.warn{background:var(--warn-bg);border-color:var(--warn)} .feedback.warn .icon{background:var(--warn);color:#3b2c0a}
+  .feedback.err{background:var(--err-bg);border-color:var(--err)} .feedback.err .icon{background:var(--err);color:#3b1414}
+  @keyframes pop{0%{transform:scale(.985)}60%{transform:scale(1.006)}100%{transform:scale(1)}}
+  .feedback.flash{animation:pop .18s ease}
+  main{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;padding:18px 20px;flex:1}
+  @media(max-width:860px){main{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .card h2{font-family:'Space Grotesk';font-size:13px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.7px;color:var(--muted);margin:0 0 14px}
+  .counters{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
+  .counter{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  .counter .n{font-family:'JetBrains Mono';font-weight:700;font-size:40px;line-height:1}
+  .counter .n small{font-size:20px;color:var(--muted-2)}
+  .counter .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:8px}
+  .counter.faltan .n{color:var(--warn)} .counter.faltan.done .n{color:var(--ok)}
+  .scanbox{display:flex;gap:10px;margin-bottom:6px}
+  .scanbox input{flex:1;background:var(--panel-2);border:2px solid var(--line);border-radius:12px;
+    color:var(--txt);font-family:'JetBrains Mono';font-size:22px;padding:14px 16px;outline:none}
+  .scanbox input:focus{border-color:var(--brand)}
+  .scanbox input::placeholder{color:var(--muted-2);font-family:'Inter';font-size:16px}
+  .hint{font-size:12px;color:var(--muted-2);margin:4px 2px 16px} .hint b{color:var(--brand)}
+  .demo{border-top:1px dashed var(--line);margin-top:6px;padding-top:14px}
+  .demo .lbl{font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{background:var(--panel-2);border:1px solid var(--line);color:var(--txt);font-family:'JetBrains Mono';
+    font-size:13px;padding:8px 12px;border-radius:999px;cursor:pointer}
+  .chip:hover{border-color:var(--brand)} .chip.bad{border-color:#4a2630}
+  .guides{max-height:340px;overflow:auto;margin:-4px -4px 0;padding:4px}
+  .guide{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;border:1px solid transparent}
+  .guide+.guide{margin-top:2px} .guide.hl{background:var(--panel-2);border-color:var(--line)}
+  .guide .code{font-family:'JetBrains Mono';font-weight:700;font-size:15px;flex:1}
+  .guide .zone{font-size:12px;color:var(--muted-2)}
+  .pill{font-family:'JetBrains Mono';font-weight:700;font-size:13px;padding:4px 10px;border-radius:8px;
+    background:#1c2733;color:var(--muted);min-width:54px;text-align:center}
+  .pill.part{background:var(--warn-bg);color:var(--warn)} .pill.full{background:var(--ok-bg);color:var(--ok)}
+  .inc{font-size:13px;color:var(--muted);padding:9px 0;border-bottom:1px solid var(--line);display:flex;gap:10px}
+  .inc:last-child{border:none} .inc .t{color:var(--err);font-weight:600;font-family:'JetBrains Mono'}
+  .empty{color:var(--muted-2);font-size:13px;padding:8px 0}
+  footer{position:sticky;bottom:0;background:linear-gradient(transparent,var(--bg) 38%);
+    padding:14px 20px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .gate{font-size:13px;color:var(--muted)} .gate b{color:var(--warn);font-family:'JetBrains Mono'}
+  .link{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;text-decoration:underline;font-family:inherit}
+  .confirm{border:none;border-radius:14px;padding:18px 34px;cursor:not-allowed;font-family:'Space Grotesk';
+    font-weight:700;font-size:18px;letter-spacing:.4px;background:#1c2733;color:var(--muted-2);transition:.15s}
+  .confirm.ready{background:var(--brand);color:#04222a;cursor:pointer;box-shadow:0 0 0 3px rgba(34,211,238,.18)}
+  .confirm.ready:hover{filter:brightness(1.06)}
+
+  /* ===== LOGIN ===== */
+  #view-login{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+  .login{width:100%;max-width:560px;text-align:center}
+  .login h1{font-family:'Space Grotesk';font-weight:600;font-size:28px;margin:0 0 4px}
+  .login p{color:var(--muted);margin:0 0 26px;font-size:15px}
+  .ops{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:520px){.ops{grid-template-columns:repeat(2,1fr)}}
+  .op{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 10px;cursor:pointer;transition:.15s}
+  .op:hover{border-color:var(--brand)}
+  .op .av{width:46px;height:46px;border-radius:50%;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;
+    font-family:'Space Grotesk';font-weight:700;font-size:18px;background:#1c2733;color:var(--brand)}
+  .op .nm{font-family:'Space Grotesk';font-weight:600;font-size:14px}
+  .op .rl{font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.5px}
+  /* PIN */
+  #pin-panel{max-width:320px;margin:0 auto}
+  .pin-who{font-family:'Space Grotesk';font-weight:600;font-size:18px;margin-bottom:4px}
+  .pin-dots{display:flex;gap:12px;justify-content:center;margin:18px 0}
+  .pin-dots .d{width:16px;height:16px;border-radius:50%;border:2px solid var(--line)}
+  .pin-dots .d.on{background:var(--brand);border-color:var(--brand)}
+  .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .key{background:var(--panel);border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:18px 0;
+    font-family:'JetBrains Mono';font-weight:700;font-size:22px;cursor:pointer}
+  .key:hover{border-color:var(--brand)} .key.act{background:#1c2733}
+  .pin-err{color:var(--err);font-size:13px;min-height:18px;margin-top:10px}
+  .pin-hint{color:var(--muted-2);font-size:12px;margin-top:8px}
+  /* usuario en cabecera */
+  .userchip{display:flex;align-items:center;gap:8px;font-size:13px}
+  .userchip .av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:'Space Grotesk';font-weight:700;font-size:12px;background:#1c2733;color:var(--brand)}
+  .userchip strong{font-family:'Space Grotesk'}
+  .userchip button{background:none;border:none;color:var(--muted-2);cursor:pointer;text-decoration:underline;font-size:12px;font-family:inherit}
+
+  /* ===== MÉTRICAS ===== */
+  #view-metricas{flex:1;padding:22px 20px}
+  .mtable{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .mtable th{font-family:'Space Grotesk';font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);
+    text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+  .mtable td{padding:13px 14px;border-bottom:1px solid var(--line);font-size:14px}
+  .mtable td.num{font-family:'JetBrains Mono';font-weight:700;text-align:right}
+  .mtable tr:last-child td{border-bottom:none}
+  .mtable .op-name{font-family:'Space Grotesk';font-weight:600}
+  .op-block{margin-bottom:20px}
+  .op-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  .op-head strong{font-family:'Space Grotesk';font-weight:600;font-size:16px}
+  .op-head .sum{color:var(--muted);font-size:13px;font-family:'JetBrains Mono'}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+  <header>
+    <div class="logo"><b>FIXY</b> · Despacho</div>
+    <div class="crumb" id="crumb">Iniciar sesión</div>
+    <div class="hdr-right" id="hdr-right"></div>
+  </header>
+
+  <!-- ===== VISTA 0: LOGIN ===== -->
+  <section id="view-login">
+    <div class="login">
+      <div id="op-select">
+        <h1>¿Quién está despachando?</h1>
+        <p>Seleccioná tu usuario para identificar el despacho.</p>
+        <div class="ops" id="ops"></div>
+      </div>
+      <div id="pin-panel" class="hidden">
+        <div class="pin-who" id="pin-who"></div>
+        <p style="margin:0 0 4px">Ingresá tu PIN</p>
+        <div class="pin-dots" id="pin-dots"></div>
+        <div class="keypad" id="keypad"></div>
+        <div class="pin-err" id="pin-err"></div>
+        <button class="link" id="pin-back" style="margin-top:14px">&larr; Cambiar de usuario</button>
+        <div class="pin-hint">Demo: el PIN de cada usuario es <b>1234</b>.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== VISTA 1: IMPORTAR EXCEL ===== -->
+  <section id="view-import" class="hidden">
+    <div class="imp">
+      <h1>Importar planillas del día</h1>
+      <p>Subí el Excel con todas las planillas de recorrido. Después elegís cuál controlar.</p>
+      <div class="drop" id="drop">
+        <div class="ico">&#8682;</div>
+        <div class="big">Arrastrá los Excel acá o hacé clic para elegir</div>
+        <div class="small">Podés subir varios .xls/.xlsx (uno por planilla)</div>
+      </div>
+      <input type="file" id="file" accept=".xlsx,.xls" class="hidden" multiple />
+      <div class="imp-note">Cada archivo de Presis es una planilla. Se toma la guía (col B) y los bultos de <b>BULTOS REALES (col F)</b>. La planilla y la fecha salen del nombre del archivo.</div>
+      <div class="errors hidden" id="errors"></div>
+    </div>
+  </section>
+
+  <!-- ===== VISTA 2: LISTA DE PLANILLAS ===== -->
+  <section id="view-list" class="hidden">
+    <div class="list-head">
+      <h2>Planillas del día</h2>
+      <div class="sub" id="list-sub"></div>
+      <button class="link" id="ver-metricas" style="margin-left:auto">Métricas por operador</button>
+      <button class="link" id="reimport">&larr; Importar otro archivo</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <!-- ===== VISTA 4: MÉTRICAS POR OPERADOR (solo supervisor) ===== -->
+  <section id="view-metricas" class="hidden">
+    <div class="list-head">
+      <h2>Métricas por operador</h2>
+      <div class="sub" id="met-sub"></div>
+      <button class="link" id="met-despachar" style="margin-left:auto">Cargar / despachar planillas &rarr;</button>
+      <button class="link hidden" id="met-volver">Volver a la lista</button>
+    </div>
+    <div id="met-body"></div>
+  </section>
+
+  <!-- ===== VISTA 3: CONTROL ===== -->
+  <div id="view-control" class="hidden" style="display:flex;flex-direction:column;flex:1">
+    <div class="feedback" id="fb">
+      <div class="icon" id="fb-icon">&#9678;</div>
+      <div>
+        <div class="msg" id="fb-msg">Listo para escanear</div>
+        <div class="sub" id="fb-sub">Escaneá el primer bulto de la hoja de ruta</div>
+      </div>
+    </div>
+    <main>
+      <section>
+        <div class="counters">
+          <div class="counter"><div class="n" id="c-guias">0<small>/0</small></div><div class="l">Guías completas</div></div>
+          <div class="counter"><div class="n" id="c-bultos">0<small>/0</small></div><div class="l">Bultos controlados</div></div>
+          <div class="counter faltan" id="c-faltan-box"><div class="n" id="c-faltan">0</div><div class="l">Bultos faltantes</div></div>
+        </div>
+        <div class="card">
+          <h2>Escaneo de bultos</h2>
+          <div class="scanbox">
+            <input id="scan" autocomplete="off" inputmode="none" placeholder="Escaneá o escribí el número de guía y Enter…" />
+          </div>
+          <div class="hint">El lector actúa como teclado: el foco vuelve solo a este campo. Cada lectura suma <b>un bulto</b> a su guía (Modelo A).</div>
+          <div class="demo">
+            <div class="lbl">Simular lecturas (no hay lector conectado)</div>
+            <div class="chips" id="chips"></div>
+          </div>
+        </div>
+      </section>
+      <section>
+        <div class="card" style="margin-bottom:18px">
+          <h2>Guías de la hoja de ruta</h2>
+          <div class="guides" id="guides"></div>
+        </div>
+        <div class="card">
+          <h2>Incidencias <span id="inc-count" style="color:var(--err)"></span></h2>
+          <div id="incidents"><div class="empty">Sin incidencias por ahora.</div></div>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <button class="link" id="volver">&larr; Volver a la lista</button>
+      <div class="gate" id="gate" style="margin-left:8px"></div>
+      <button class="confirm" id="confirm" style="margin-left:auto" disabled>CONFIRMAR DESPACHO</button>
+    </footer>
+  </div>
+
+<script>
+// =====================================================================
+//  USUARIOS / LOGIN
+//  En producción esta lista y el PIN se validan contra el backend
+//  (GET /api/usuarios + POST /api/login). Acá están para el prototipo.
+// =====================================================================
+const USUARIOS = [
+  { id: 1, nombre: 'Lucas Pereyra',  rol: 'operador',   pin: '1234' },
+  { id: 2, nombre: 'Marina Gómez',   rol: 'operador',   pin: '1234' },
+  { id: 3, nombre: 'Diego Sosa',     rol: 'operador',   pin: '1234' },
+  { id: 4, nombre: 'Carla Ríos',     rol: 'operador',   pin: '1234' },
+  { id: 5, nombre: 'Javier Núñez',   rol: 'operador',   pin: '1234' },
+  { id: 6, nombre: 'Sofía Acosta',   rol: 'supervisor', pin: '1234' },
+];
+let USUARIO = null;           // operador logueado
+// Registros de despacho (para métricas). En producción salen del backend.
+// Estos primeros son DE EJEMPLO para que el supervisor vea la pantalla al entrar.
+const DESPACHOS = [
+  { usuarioId:1, usuario:'Lucas Pereyra', planilla:'57005', transportista:'Andreani', guias:38, bultos:38, duracionSeg:512, fecha:'29/06/2026' },
+  { usuarioId:1, usuario:'Lucas Pereyra', planilla:'57008', transportista:'OCA',      guias:41, bultos:43, duracionSeg:640, fecha:'30/06/2026' },
+  { usuarioId:2, usuario:'Marina Gómez',  planilla:'57006', transportista:'Andreani', guias:35, bultos:36, duracionSeg:470, fecha:'29/06/2026' },
+  { usuarioId:2, usuario:'Marina Gómez',  planilla:'57011', transportista:'Cruz del Sur', guias:52, bultos:55, duracionSeg:705, fecha:'30/06/2026' },
+  { usuarioId:3, usuario:'Diego Sosa',    planilla:'57009', transportista:'OCA',      guias:29, bultos:30, duracionSeg:388, fecha:'30/06/2026' },
+];
+
+const iniciales = n => n.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
+
+function renderLogin(){
+  const ops = document.getElementById('ops'); ops.innerHTML='';
+  USUARIOS.forEach(u=>{
+    const b=document.createElement('div'); b.className='op';
+    b.innerHTML=`<div class="av">${iniciales(u.nombre)}</div><div class="nm">${u.nombre}</div><div class="rl">${u.rol}</div>`;
+    b.onclick=()=>pedirPin(u);
+    ops.appendChild(b);
+  });
+  document.getElementById('op-select').classList.remove('hidden');
+  document.getElementById('pin-panel').classList.add('hidden');
+}
+
+let pinUser=null, pinBuf='';
+function pedirPin(u){
+  pinUser=u; pinBuf='';
+  document.getElementById('op-select').classList.add('hidden');
+  document.getElementById('pin-panel').classList.remove('hidden');
+  document.getElementById('pin-who').textContent=u.nombre;
+  document.getElementById('pin-err').textContent='';
+  renderPinDots(); renderKeypad();
+}
+function renderPinDots(){
+  const d=document.getElementById('pin-dots'); d.innerHTML='';
+  for(let i=0;i<4;i++){ const x=document.createElement('div'); x.className='d'+(i<pinBuf.length?' on':''); d.appendChild(x); }
+}
+function renderKeypad(){
+  const k=document.getElementById('keypad'); k.innerHTML='';
+  ['1','2','3','4','5','6','7','8','9','C','0','OK'].forEach(t=>{
+    const b=document.createElement('button'); b.className='key'; b.textContent=t;
+    b.onclick=()=>pinTecla(t); k.appendChild(b);
+  });
+}
+function pinTecla(t){
+  if(t==='C'){ pinBuf=''; }
+  else if(t==='OK'){ validarPin(); return; }
+  else if(pinBuf.length<4){ pinBuf+=t; }
+  document.getElementById('pin-err').textContent='';
+  renderPinDots();
+  if(pinBuf.length===4) validarPin();
+}
+function validarPin(){
+  if(pinBuf===pinUser.pin){
+    USUARIO={ id:pinUser.id, nombre:pinUser.nombre, rol:pinUser.rol };
+    mostrarUsuarioEnCabecera();
+    if(USUARIO.rol==='supervisor'){
+      abrirMetricas();          // el supervisor cae directo en métricas
+    }else{
+      document.getElementById('crumb').textContent='Importar planillas del día';
+      mostrarVista('import');   // el operador va a despachar
+    }
+  }else{
+    pinBuf=''; renderPinDots();
+    document.getElementById('pin-err').textContent='PIN incorrecto. Probá de nuevo.';
+  }
+}
+function mostrarUsuarioEnCabecera(){ setHeader(''); }
+function userChipHtml(){
+  if(!USUARIO) return '';
+  return `<div class="userchip"><div class="av">${iniciales(USUARIO.nombre)}</div>`+
+    `<div><strong>${USUARIO.nombre}</strong></div>`+
+    `<button id="logout">Salir</button></div>`;
+}
+// Pone contexto (izq) + chip de usuario (der) en la cabecera, sin perder al operador.
+function setHeader(contextoHtml){
+  document.getElementById('hdr-right').innerHTML =
+    (contextoHtml||'') + userChipHtml();
+  const lo=document.getElementById('logout'); if(lo) lo.onclick=cerrarSesion;
+}
+function cerrarSesion(){
+  USUARIO=null;
+  document.getElementById('hdr-right').innerHTML='';
+  document.getElementById('crumb').textContent='Iniciar sesión';
+  renderLogin();
+  mostrarVista('login');
+}
+
+// =====================================================================
+//  MAPEO DE COLUMNAS DEL EXCEL
+//  Si tu Excel usa otros nombres de columna, agregalos como alias acá.
+//  (No hace falta tocar nada más.)
+// =====================================================================
+const COLUMNAS = {
+  planilla:      ['planilla','nro planilla','numero planilla','planilla nro','hoja de ruta'],
+  fecha:         ['fecha'],
+  transportista: ['transportista','chofer','movil','móvil'],
+  zona:          ['zona'],
+  guia:          ['guia','guía','numero guia','nro guia','tracking'],
+  // OJO: 'bultos reales' va PRIMERO para que tome la columna F de Presis.
+  // Si querés controlar contra la columna E ("BULTOS"), poné 'bultos' primero.
+  bultos:        ['bultos reales','bulto real','bultos real','bultos','cantidad bultos','cant bultos','cantidad de bultos'],
+  zona_guia:     ['zona_guia','zona guia','localidad'],
+};
+
+const norm = s => String(s==null?'':s).trim().toLowerCase().replace(/\s+/g,' ');
+function indiceDe(headers, alias){
+  const h = headers.map(norm);
+  for(const a of alias){ const i=h.indexOf(norm(a)); if(i>=0) return i; }
+  return -1;
+}
+
+// =====================================================================
+//  IMPORTAR Y PARSEAR EL EXCEL
+// =====================================================================
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+const errBox = document.getElementById('errors');
+
+drop.onclick = ()=> fileInput.click();
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop', e=>{ if(e.dataTransfer.files.length) leerArchivos(e.dataTransfer.files); });
+fileInput.addEventListener('change', e=>{ if(e.target.files.length) leerArchivos(e.target.files); });
+
+// Saca número de planilla y fecha del nombre del archivo (formato Presis).
+// Ej: "30_06_2026_570102026-06-30.xls" -> planilla 57010, fecha 2026-06-30
+function metaDeNombre(fn){
+  const base = String(fn).replace(/\.[^.]+$/,'');
+  const m = base.match(/(\d{4}-\d{2}-\d{2})$/);
+  const fecha = m ? m[1] : '';
+  const ult = base.split('_').pop() || base;
+  const planilla = fecha ? ult.slice(0, -10) : ult;
+  return { planilla: (planilla || base), fecha };
+}
+
+function leerArchivos(fileList){
+  errBox.classList.add('hidden'); errBox.innerHTML='';
+  const archivos = [...fileList];
+  const lecturas = archivos.map(file => new Promise(resolve=>{
+    const reader = new FileReader();
+    reader.onload = ev =>{
+      try{
+        const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+        const sheet = wb.SheetNames.includes('Planillas') ? 'Planillas' : wb.SheetNames[0];
+        const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sheet], {header:1, raw:false, defval:''});
+        resolve(procesarArchivo(aoa, file.name));
+      }catch(err){
+        resolve({ planillas:[], errores:[`${file.name}: no se pudo leer (¿es un .xls/.xlsx válido?).`] });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }));
+
+  Promise.all(lecturas).then(resultados=>{
+    const planillas = [];
+    const errores = [];
+    resultados.forEach(r=>{ planillas.push(...r.planillas); errores.push(...r.errores); });
+    if(!planillas.length){ mostrarErrores(errores.length?errores:['No se encontraron planillas válidas.']); return; }
+    if(errores.length) mostrarErrores(errores.concat([`Importadas ${planillas.length} planilla(s) con las filas válidas.`]));
+    abrirLista(planillas);
+  });
+}
+
+// Detecta el formato y devuelve { planillas:[...], errores:[...] }
+function procesarArchivo(aoa, filename){
+  if(!aoa.length) return { planillas:[], errores:[`${filename}: archivo vacío.`] };
+  const headers = aoa[0];
+  const idx = {};
+  for(const campo of Object.keys(COLUMNAS)) idx[campo] = indiceDe(headers, COLUMNAS[campo]);
+
+  // Formato A: el Excel ya trae columna 'planilla' (varias planillas agrupadas)
+  if(idx.planilla >= 0) return parseAgrupado(aoa, idx, filename);
+
+  // Formato B (Presis): un archivo = una planilla; metadatos del nombre de archivo
+  if(idx.guia >= 0 && idx.bultos >= 0) return parsePresis(aoa, idx, filename);
+
+  return { planillas:[], errores:[`${filename}: no encuentro las columnas (guía / bultos).`] };
+}
+
+function parseAgrupado(aoa, idx, filename){
+  const errores=[]; const mapa=new Map();
+  for(let r=1;r<aoa.length;r++){
+    const f=aoa[r]; if(!f||f.every(c=>String(c).trim()==='')) continue;
+    const nroPl=String(f[idx.planilla]).trim();
+    const guia=String(f[idx.guia]).trim();
+    const bultos=parseInt(String(f[idx.bultos]).trim(),10);
+    if(!nroPl){errores.push(`${filename} fila ${r+1}: sin planilla.`);continue;}
+    if(!guia){errores.push(`${filename} fila ${r+1}: sin guía.`);continue;}
+    if(!Number.isInteger(bultos)||bultos<1){errores.push(`${filename} fila ${r+1} (guía ${guia}): bultos inválido.`);continue;}
+    if(!mapa.has(nroPl)) mapa.set(nroPl,{ hojaId:nroPl,
+      transportista: idx.transportista>=0?String(f[idx.transportista]).trim():'',
+      zona: idx.zona>=0?String(f[idx.zona]).trim():'',
+      fecha: idx.fecha>=0?String(f[idx.fecha]).trim():'', guias:[], estado:'pendiente' });
+    mapa.get(nroPl).guias.push({ numero:guia, esperados:bultos,
+      zona: idx.zona_guia>=0&&f[idx.zona_guia]?String(f[idx.zona_guia]).trim():(idx.zona>=0?String(f[idx.zona]).trim():'') });
+  }
+  return { planillas:[...mapa.values()], errores };
+}
+
+function parsePresis(aoa, idx, filename){
+  const errores=[]; const meta=metaDeNombre(filename);
+  const guias=[];
+  for(let r=1;r<aoa.length;r++){
+    const f=aoa[r]; if(!f||f.every(c=>String(c).trim()==='')) continue;
+    const guia=String(f[idx.guia]).trim();
+    if(!/^\d/.test(guia)) continue; // saltea filas que no son guía (totales, etc.)
+    const bultos=parseInt(String(f[idx.bultos]).trim(),10);
+    if(!Number.isInteger(bultos)||bultos<1){errores.push(`${filename} fila ${r+1} (guía ${guia}): bultos inválido.`);continue;}
+    guias.push({ numero:guia, esperados:bultos,
+      zona: idx.zona_guia>=0&&f[idx.zona_guia]?String(f[idx.zona_guia]).trim():'' });
+  }
+  if(!guias.length) return { planillas:[], errores:errores.concat([`${filename}: sin guías válidas.`]) };
+  return { planillas:[{
+    hojaId: meta.planilla, transportista:'', zona:'', fecha: meta.fecha, guias, estado:'pendiente'
+  }], errores };
+}
+
+function mostrarErrores(lista){
+  errBox.classList.remove('hidden');
+  errBox.innerHTML = '<h3>Revisá el archivo</h3>' + lista.map(e=>`<div>• ${e}</div>`).join('');
+}
+
+// =====================================================================
+//  LISTA DE PLANILLAS
+// =====================================================================
+let PLANILLAS = [];
+
+function abrirLista(planillas){
+  if(planillas) PLANILLAS = planillas;
+  const totalGuias = PLANILLAS.reduce((s,p)=>s+p.guias.length,0);
+  const totalBultos = PLANILLAS.reduce((s,p)=>s+p.guias.reduce((a,g)=>a+g.esperados,0),0);
+  document.getElementById('list-sub').textContent =
+    `${PLANILLAS.length} planillas · ${totalGuias} guías · ${totalBultos} bultos`;
+
+  const grid = document.getElementById('grid'); grid.innerHTML='';
+  PLANILLAS.forEach((p,i)=>{
+    const nb = p.guias.reduce((a,g)=>a+g.esperados,0);
+    const card = document.createElement('div'); card.className='pl-card';
+    const done = p.estado==='despachada';
+    const transTxt = p.transportista ? p.transportista : '+ Asignar transportista';
+    const transCls = p.transportista ? 'trans' : 'trans';
+    const transStyle = p.transportista ? '' : 'color:var(--brand);cursor:pointer;font-size:14px';
+    card.innerHTML = `
+      <span class="badge ${done?'done':'pend'}">${done?'Despachada ✓':'Pendiente'}</span>
+      <div class="${transCls}" data-i="${i}" style="${transStyle}">${transTxt}</div>
+      <div class="id">Planilla ${p.hojaId}</div>
+      <div class="zf">${p.zona||'—'} · ${p.fecha||'—'}</div>
+      <div class="stats">
+        <div><span class="n">${p.guias.length}</span><span class="l">Guías</span></div>
+        <div><span class="n">${nb}</span><span class="l">Bultos</span></div>
+      </div>`;
+    // Click en el transportista -> asignar / editar
+    const transEl = card.querySelector('.trans');
+    transEl.style.cursor = 'pointer';
+    transEl.title = 'Clic para asignar el transportista';
+    transEl.onclick = ()=>{
+      const val = prompt('Transportista de la planilla '+p.hojaId+':', p.transportista||'');
+      if(val!==null){ p.transportista = val.trim(); abrirLista(); }
+    };
+    const btn = document.createElement('button');
+    btn.className = 'ctrl-btn'+(done?' done':'');
+    btn.textContent = done ? 'Despachada' : 'Controlar';
+    if(!done) btn.onclick = ()=> iniciarControl(p);
+    card.appendChild(btn);
+    grid.appendChild(card);
+  });
+
+  mostrarVista('list');
+  document.getElementById('crumb').textContent='Seleccioná una planilla';
+  setHeader(`<div class="meta"><span>Importadas</span><strong>${PLANILLAS.length} planillas</strong></div>`);
+  // El acceso a métricas es solo para supervisores
+  document.getElementById('ver-metricas').style.display =
+    (USUARIO && USUARIO.rol==='supervisor') ? '' : 'none';
+}
+
+document.getElementById('reimport').onclick = ()=>{
+  fileInput.value='';
+  document.getElementById('crumb').textContent='Importar planillas del día';
+  setHeader('');
+  mostrarVista('import');
+};
+document.getElementById('ver-metricas').onclick = ()=> abrirMetricas();
+document.getElementById('met-volver').onclick = ()=> abrirLista();
+document.getElementById('met-despachar').onclick = ()=>{
+  document.getElementById('crumb').textContent='Importar planillas del día';
+  setHeader('');
+  mostrarVista('import');
+};
+
+function mostrarVista(v){
+  document.getElementById('view-login').classList.toggle('hidden', v!=='login');
+  document.getElementById('view-import').classList.toggle('hidden', v!=='import');
+  document.getElementById('view-list').classList.toggle('hidden', v!=='list');
+  document.getElementById('view-control').classList.toggle('hidden', v!=='control');
+  document.getElementById('view-metricas').classList.toggle('hidden', v!=='metricas');
+}
+
+// =====================================================================
+//  CONTROL (lógica Modelo A)
+// =====================================================================
+let hojaRuta=null, counts={}, incidents=[], despachado=false;
+let totalGuias=0, totalBultos=0, byNum={}, planillaActual=null, inicioControl=null;
+
+function iniciarControl(p){
+  planillaActual=p; hojaRuta=p;
+  counts={}; incidents=[]; despachado=false;
+  inicioControl=Date.now();              // arranca el cronómetro del despacho
+  hojaRuta.guias.forEach(g=>counts[g.numero]=0);
+  totalGuias=hojaRuta.guias.length;
+  totalBultos=hojaRuta.guias.reduce((s,g)=>s+g.esperados,0);
+  byNum=Object.fromEntries(hojaRuta.guias.map(g=>[g.numero,g]));
+
+  document.getElementById('crumb').textContent='Control de carga';
+  setHeader(
+    `<div class="meta"><span>Transportista</span><strong>${hojaRuta.transportista||'Sin asignar'}</strong></div>`+
+    `<div class="meta"><span>Planilla</span><strong>${hojaRuta.hojaId}</strong></div>`+
+    `<div class="meta"><span>Zona</span><strong>${hojaRuta.zona||'—'}</strong></div>`+
+    `<div class="meta"><span>Fecha</span><strong>${hojaRuta.fecha||'—'}</strong></div>`
+  );
+
+  const fb=document.getElementById('fb'); fb.className='feedback';
+  document.getElementById('fb-icon').innerHTML='&#9678;';
+  document.getElementById('fb-msg').textContent='Listo para escanear';
+  document.getElementById('fb-sub').textContent=`${totalGuias} guías · ${totalBultos} bultos esperados`;
+
+  const chips=document.getElementById('chips'); chips.innerHTML='';
+  hojaRuta.guias.forEach(g=>{
+    const c=document.createElement('button'); c.className='chip'; c.textContent=g.numero;
+    c.onclick=()=>scan(g.numero); chips.appendChild(c);
+  });
+  const bad=document.createElement('button'); bad.className='chip bad'; bad.textContent='999000111 (no asignada)';
+  bad.onclick=()=>scan('999000111'); chips.appendChild(bad);
+
+  document.getElementById('confirm').textContent='CONFIRMAR DESPACHO';
+  mostrarVista('control'); render(); refocus();
+}
+
+function scan(raw){
+  if(despachado) return;
+  const code=(raw||'').trim(); if(!code) return;
+  const g=byNum[code];
+  if(!g){
+    addIncident('guia_no_asignada',code);
+    feedback('err','&#10005;','Guía no asignada a este transportista',`El código ${code} no está en la planilla ${hojaRuta.hojaId}.`);
+  }else if(counts[code]>=g.esperados){
+    addIncident('bulto_sobrante',code);
+    feedback('warn','!','Guía ya completa',`La guía ${code} ya tiene sus ${g.esperados} bulto(s) escaneado(s).`);
+  }else{
+    counts[code]++; const n=counts[code];
+    if(n===g.esperados) feedback('ok','&#10003;',`Guía completa · ${n}/${g.esperados} bultos`,`Guía ${code} · ${g.zona}`);
+    else feedback('ok','&#10003;',`Bulto ${n} de ${g.esperados}`,`Guía ${code} · ${g.zona} · faltan ${g.esperados-n}`);
+  }
+  render();
+}
+function feedback(type,icon,msg,sub){
+  const fb=document.getElementById('fb'); fb.className='feedback '+type;
+  void fb.offsetWidth; fb.classList.add('flash');
+  document.getElementById('fb-icon').innerHTML=icon;
+  document.getElementById('fb-msg').textContent=msg;
+  document.getElementById('fb-sub').textContent=sub;
+}
+function addIncident(tipo,code){
+  const labels={guia_no_asignada:'No asignada',bulto_sobrante:'Bulto sobrante'};
+  incidents.unshift({tipo:labels[tipo],code,hora:new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})});
+}
+function render(){
+  const bultosCtrl=Object.values(counts).reduce((a,b)=>a+b,0);
+  const guiasComp=hojaRuta.guias.filter(g=>counts[g.numero]>=g.esperados).length;
+  const faltan=totalBultos-bultosCtrl;
+  document.getElementById('c-guias').innerHTML=`${guiasComp}<small>/${totalGuias}</small>`;
+  document.getElementById('c-bultos').innerHTML=`${bultosCtrl}<small>/${totalBultos}</small>`;
+  document.getElementById('c-faltan').textContent=faltan;
+  document.getElementById('c-faltan-box').classList.toggle('done',faltan===0);
+
+  const list=document.getElementById('guides'); list.innerHTML='';
+  hojaRuta.guias.forEach(g=>{
+    const n=counts[g.numero]; const row=document.createElement('div');
+    row.className='guide'+(n>0?' hl':'');
+    let pc='pill'; if(n>0&&n<g.esperados)pc='pill part'; if(n>=g.esperados)pc='pill full';
+    row.innerHTML=`<div class="code">${g.numero}</div><div class="zone">${g.zona||''}</div>`+
+      `<div class="${pc}">${n}/${g.esperados}${n>=g.esperados?' ✓':''}</div>`;
+    list.appendChild(row);
+  });
+
+  const ic=document.getElementById('incidents');
+  document.getElementById('inc-count').textContent=incidents.length?`(${incidents.length})`:'';
+  if(!incidents.length){ic.innerHTML='<div class="empty">Sin incidencias por ahora.</div>';}
+  else{ic.innerHTML='';incidents.forEach(i=>{
+    const d=document.createElement('div'); d.className='inc';
+    d.innerHTML=`<span class="t">${i.tipo}</span><span style="font-family:'JetBrains Mono'">${i.code}</span><span style="margin-left:auto;color:var(--muted-2)">${i.hora}</span>`;
+    ic.appendChild(d);});}
+
+  const btn=document.getElementById('confirm'), gate=document.getElementById('gate');
+  if(faltan===0){btn.classList.add('ready');btn.disabled=false;gate.innerHTML='Todos los bultos controlados. Listo para confirmar.';}
+  else{btn.classList.remove('ready');btn.disabled=true;gate.innerHTML=`No se puede cerrar: faltan <b>${faltan}</b> bulto(s).`;}
+}
+
+document.getElementById('confirm').onclick=()=>{
+  const btn=document.getElementById('confirm'); if(btn.disabled) return;
+  despachado=true;
+  const bultosCtrl=Object.values(counts).reduce((a,b)=>a+b,0);
+  if(planillaActual) planillaActual.estado='despachada';
+
+  // ---- Registro para métricas: quién, cuánto tardó, cuándo ----
+  const fin=Date.now();
+  const duracionSeg=Math.max(1, Math.round((fin-(inicioControl||fin))/1000));
+  DESPACHOS.push({
+    usuarioId: USUARIO?USUARIO.id:null,
+    usuario: USUARIO?USUARIO.nombre:'—',
+    planilla: hojaRuta.hojaId,
+    transportista: hojaRuta.transportista||'Sin asignar',
+    guias: totalGuias,
+    bultos: bultosCtrl,
+    inicio: new Date(inicioControl).toISOString(),
+    fin: new Date(fin).toISOString(),
+    duracionSeg,
+    fecha: new Date(fin).toLocaleDateString('es-AR'),
+  });
+
+  feedback('ok','&#10003;','Despacho confirmado',
+    `${hojaRuta.hojaId} · ${totalGuias} guías · ${bultosCtrl} bultos · ${USUARIO?USUARIO.nombre:''} · ${fmtDur(duracionSeg)} · ${new Date().toLocaleString('es-AR')}`);
+  btn.classList.remove('ready'); btn.disabled=true; btn.textContent='DESPACHO CONFIRMADO ✓';
+  document.getElementById('gate').innerHTML='Auditoría registrada. <button class="link" id="goback">Volver a la lista</button>';
+  document.getElementById('goback').onclick=()=>abrirLista();
+};
+
+document.getElementById('volver').onclick=()=>abrirLista();
+
+const input=document.getElementById('scan');
+input.addEventListener('keydown',e=>{ if(e.key==='Enter'){scan(input.value);input.value='';}});
+function refocus(){ if(!despachado && !document.getElementById('view-control').classList.contains('hidden')) input.focus(); }
+input.addEventListener('blur',()=>setTimeout(refocus,80));
+document.addEventListener('click',e=>{ if(!e.target.closest('button') && document.getElementById('view-control') && !document.getElementById('view-control').classList.contains('hidden')) refocus(); });
+
+// =====================================================================
+//  MÉTRICAS POR OPERADOR
+// =====================================================================
+function fmtDur(seg){
+  const m=Math.floor(seg/60), s=seg%60;
+  return m>0 ? `${m}m ${s}s` : `${s}s`;
+}
+function abrirMetricas(){
+  setHeader('');
+  document.getElementById('crumb').textContent='Métricas';
+  // ¿hay planillas importadas? entonces ofrezco "volver a la lista"
+  document.getElementById('met-volver').classList.toggle('hidden', !(PLANILLAS && PLANILLAS.length));
+
+  // Agrupar despachos por operador
+  const agg=new Map();
+  DESPACHOS.forEach(d=>{
+    if(!agg.has(d.usuario)) agg.set(d.usuario,{usuario:d.usuario,items:[],bultos:0,tiempo:0});
+    const a=agg.get(d.usuario); a.items.push(d); a.bultos+=d.bultos; a.tiempo+=d.duracionSeg;
+  });
+  const ops=[...agg.values()].sort((x,y)=>y.bultos-x.bultos);
+  document.getElementById('met-sub').textContent=`${DESPACHOS.length} despachos registrados`;
+
+  const body=document.getElementById('met-body');
+  if(!ops.length){
+    body.innerHTML='<div class="empty" style="padding:24px">Todavía no hay despachos registrados.</div>';
+  }else{
+    body.innerHTML = ops.map(a=>{
+      const prom=Math.round(a.tiempo/a.items.length);
+      // ordeno los despachos del operador por fecha
+      const items=[...a.items].sort((x,y)=>String(x.fecha).localeCompare(String(y.fecha)));
+      const rows=items.map(d=>
+        `<tr><td class="op-name">${d.planilla}</td><td>${d.fecha}</td>`+
+        `<td>${d.transportista||'—'}</td><td class="num">${d.guias}</td>`+
+        `<td class="num">${d.bultos}</td><td class="num">${fmtDur(d.duracionSeg)}</td></tr>`
+      ).join('');
+      return `<div class="op-block">
+        <div class="op-head"><strong>${a.usuario}</strong>
+          <span class="sum">${a.items.length} planillas · ${a.bultos} bultos · ${fmtDur(a.tiempo)} total · prom ${fmtDur(prom)}</span>
+        </div>
+        <table class="mtable"><thead><tr>
+          <th>Planilla</th><th>Fecha</th><th>Transportista</th>
+          <th style="text-align:right">Guías</th><th style="text-align:right">Bultos</th><th style="text-align:right">Tiempo</th>
+        </tr></thead><tbody>${rows}</tbody></table>
+      </div>`;
+    }).join('');
+  }
+  mostrarVista('metricas');
+}
+
+// =====================================================================
+//  ARRANQUE: mostrar el login
+// =====================================================================
+renderLogin();
+mostrarVista('login');
+document.getElementById('pin-back').onclick=()=>{ pinBuf=''; renderLogin(); };
+</script>
+</body>
+</html>
