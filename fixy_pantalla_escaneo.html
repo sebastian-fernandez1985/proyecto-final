@@ -115,6 +115,9 @@
   .pill{font-family:'JetBrains Mono';font-weight:700;font-size:13px;padding:4px 10px;border-radius:8px;
     background:#1c2733;color:var(--muted);min-width:54px;text-align:center}
   .pill.part{background:var(--warn-bg);color:var(--warn)} .pill.full{background:var(--ok-bg);color:var(--ok)}
+  .guide .rm{background:none;border:1px solid var(--line);color:var(--muted-2);border-radius:8px;
+    width:28px;height:28px;flex:none;cursor:pointer;font-size:13px;line-height:1;margin-left:8px}
+  .guide .rm:hover{border-color:var(--err);color:var(--err)}
   .inc{font-size:13px;color:var(--muted);padding:9px 0;border-bottom:1px solid var(--line);display:flex;gap:10px}
   .inc:last-child{border:none} .inc .t{color:var(--err);font-weight:600;font-family:'JetBrains Mono'}
   .empty{color:var(--muted-2);font-size:13px;padding:8px 0}
@@ -172,6 +175,9 @@
   .op-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
   .op-head strong{font-family:'Space Grotesk';font-weight:600;font-size:16px}
   .op-head .sum{color:var(--muted);font-size:13px;font-family:'JetBrains Mono'}
+  .btn-sm{background:var(--brand);color:#04222a;border:none;border-radius:10px;padding:9px 16px;cursor:pointer;
+    font-family:'Space Grotesk';font-weight:700;font-size:13px}
+  .btn-sm:hover{filter:brightness(1.06)}
   @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -234,7 +240,8 @@
     <div class="list-head">
       <h2>Métricas por operador</h2>
       <div class="sub" id="met-sub"></div>
-      <button class="link" id="met-despachar" style="margin-left:auto">Cargar / despachar planillas &rarr;</button>
+      <button class="btn-sm" id="met-export" style="margin-left:auto">⤓ Exportar a Excel</button>
+      <button class="link" id="met-despachar">Cargar / despachar planillas &rarr;</button>
       <button class="link hidden" id="met-volver">Volver a la lista</button>
     </div>
     <div id="met-body"></div>
@@ -302,13 +309,16 @@ const USUARIOS = [
 ];
 let USUARIO = null;           // operador logueado
 // Registros de despacho (para métricas). En producción salen del backend.
-// Estos primeros son DE EJEMPLO para que el supervisor vea la pantalla al entrar.
+// Estos primeros son DE EJEMPLO (fechas dentro de la semana actual) para que
+// el supervisor vea la pantalla al entrar.
+const _hoyAR = new Date().toLocaleDateString('es-AR');
+const _lunAR = inicioSemana(new Date()).toLocaleDateString('es-AR');
 const DESPACHOS = [
-  { usuarioId:1, usuario:'Lucas Pereyra', planilla:'57005', transportista:'Andreani', guias:38, bultos:38, duracionSeg:512, fecha:'29/06/2026' },
-  { usuarioId:1, usuario:'Lucas Pereyra', planilla:'57008', transportista:'OCA',      guias:41, bultos:43, duracionSeg:640, fecha:'30/06/2026' },
-  { usuarioId:2, usuario:'Marina Gómez',  planilla:'57006', transportista:'Andreani', guias:35, bultos:36, duracionSeg:470, fecha:'29/06/2026' },
-  { usuarioId:2, usuario:'Marina Gómez',  planilla:'57011', transportista:'Cruz del Sur', guias:52, bultos:55, duracionSeg:705, fecha:'30/06/2026' },
-  { usuarioId:3, usuario:'Diego Sosa',    planilla:'57009', transportista:'OCA',      guias:29, bultos:30, duracionSeg:388, fecha:'30/06/2026' },
+  { usuarioId:1, usuario:'Lucas Pereyra', planilla:'57005', transportista:'Andreani',     guias:38, bultos:38, duracionSeg:512, fecha:_lunAR },
+  { usuarioId:1, usuario:'Lucas Pereyra', planilla:'57008', transportista:'OCA',          guias:41, bultos:43, duracionSeg:640, fecha:_hoyAR },
+  { usuarioId:2, usuario:'Marina Gómez',  planilla:'57006', transportista:'Andreani',     guias:35, bultos:36, duracionSeg:470, fecha:_lunAR },
+  { usuarioId:2, usuario:'Marina Gómez',  planilla:'57011', transportista:'Cruz del Sur', guias:52, bultos:55, duracionSeg:705, fecha:_hoyAR },
+  { usuarioId:3, usuario:'Diego Sosa',    planilla:'57009', transportista:'OCA',          guias:29, bultos:30, duracionSeg:388, fecha:_hoyAR },
 ];
 
 const iniciales = n => n.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
@@ -585,6 +595,7 @@ document.getElementById('reimport').onclick = ()=>{
 };
 document.getElementById('ver-metricas').onclick = ()=> abrirMetricas();
 document.getElementById('met-volver').onclick = ()=> abrirLista();
+document.getElementById('met-export').onclick = ()=> exportarMetricas();
 document.getElementById('met-despachar').onclick = ()=>{
   document.getElementById('crumb').textContent='Importar planillas del día';
   setHeader('');
@@ -651,8 +662,15 @@ function scan(raw){
     feedback('warn','!','Guía ya completa',`La guía ${code} ya tiene sus ${g.esperados} bulto(s) escaneado(s).`);
   }else{
     counts[code]++; const n=counts[code];
-    if(n===g.esperados) feedback('ok','&#10003;',`Guía completa · ${n}/${g.esperados} bultos`,`Guía ${code} · ${g.zona}`);
-    else feedback('ok','&#10003;',`Bulto ${n} de ${g.esperados}`,`Guía ${code} · ${g.zona} · faltan ${g.esperados-n}`);
+    if(n===g.esperados){
+      // guía completa (incluye las de 1 bulto) -> verde
+      feedback('ok','&#10003;',`Guía completa · ${n}/${g.esperados} bultos`,`Guía ${code} · ${g.zona}`);
+    }else{
+      // guía de 2+ bultos todavía incompleta -> NARANJA con aviso
+      const restan=g.esperados-n;
+      const msg = n===1 ? `Atento: son ${g.esperados} bultos` : `Bulto ${n} de ${g.esperados}`;
+      feedback('warn','&#9888;', msg, `Guía ${code} · falta${restan>1?'n':''} ${restan} bulto(s) por escanear`);
+    }
   }
   render();
 }
@@ -666,6 +684,21 @@ function feedback(type,icon,msg,sub){
 function addIncident(tipo,code){
   const labels={guia_no_asignada:'No asignada',bulto_sobrante:'Bulto sobrante'};
   incidents.unshift({tipo:labels[tipo],code,hora:new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})});
+}
+
+// Quita una guía faltante de la planilla (pedido perdido, etc.).
+// Queda registrada como incidencia y deja de contar para poder cerrar.
+function quitarGuia(numero){
+  if(despachado) return;
+  const g=byNum[numero]; if(!g) return;
+  if(!confirm(`¿Quitar la guía ${numero}?\nSe registra como FALTANTE y no se va a controlar. Vas a poder cerrar la planilla con el resto.`)) return;
+  hojaRuta.guias = hojaRuta.guias.filter(x=>x.numero!==numero);
+  delete counts[numero]; delete byNum[numero];
+  totalGuias = hojaRuta.guias.length;
+  totalBultos = hojaRuta.guias.reduce((s,x)=>s+x.esperados,0);
+  incidents.unshift({tipo:'Faltante (quitada)', code:numero, hora:new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})});
+  feedback('warn','&#8722;',`Guía ${numero} quitada`,'Registrada como faltante. Seguí con el resto y cerrá cuando esté todo.');
+  render();
 }
 function render(){
   const bultosCtrl=Object.values(counts).reduce((a,b)=>a+b,0);
@@ -683,6 +716,10 @@ function render(){
     let pc='pill'; if(n>0&&n<g.esperados)pc='pill part'; if(n>=g.esperados)pc='pill full';
     row.innerHTML=`<div class="code">${g.numero}</div><div class="zone">${g.zona||''}</div>`+
       `<div class="${pc}">${n}/${g.esperados}${n>=g.esperados?' ✓':''}</div>`;
+    const rm=document.createElement('button');
+    rm.className='rm'; rm.innerHTML='&#10005;'; rm.title='Quitar guía (faltante)';
+    rm.onclick=(e)=>{ e.stopPropagation(); quitarGuia(g.numero); };
+    row.appendChild(rm);
     list.appendChild(row);
   });
 
@@ -746,26 +783,28 @@ function fmtDur(seg){
 function abrirMetricas(){
   setHeader('');
   document.getElementById('crumb').textContent='Métricas';
-  // ¿hay planillas importadas? entonces ofrezco "volver a la lista"
   document.getElementById('met-volver').classList.toggle('hidden', !(PLANILLAS && PLANILLAS.length));
 
-  // Agrupar despachos por operador
+  // Solo la SEMANA ACTUAL (arranca en cero cada lunes, sin borrar historial)
+  const semana = DESPACHOS.filter(d=>enSemanaActual(d.fecha));
+
   const agg=new Map();
-  DESPACHOS.forEach(d=>{
+  semana.forEach(d=>{
     if(!agg.has(d.usuario)) agg.set(d.usuario,{usuario:d.usuario,items:[],bultos:0,tiempo:0});
     const a=agg.get(d.usuario); a.items.push(d); a.bultos+=d.bultos; a.tiempo+=d.duracionSeg;
   });
   const ops=[...agg.values()].sort((x,y)=>y.bultos-x.bultos);
-  document.getElementById('met-sub').textContent=`${DESPACHOS.length} despachos registrados`;
+  const ini=inicioSemana(new Date());
+  document.getElementById('met-sub').textContent =
+    `Semana desde el ${ini.toLocaleDateString('es-AR')} · ${semana.length} despachos`;
 
   const body=document.getElementById('met-body');
   if(!ops.length){
-    body.innerHTML='<div class="empty" style="padding:24px">Todavía no hay despachos registrados.</div>';
+    body.innerHTML='<div class="empty" style="padding:24px">No hay despachos esta semana todavía.</div>';
   }else{
     body.innerHTML = ops.map(a=>{
       const prom=Math.round(a.tiempo/a.items.length);
-      // ordeno los despachos del operador por fecha
-      const items=[...a.items].sort((x,y)=>String(x.fecha).localeCompare(String(y.fecha)));
+      const items=[...a.items].sort((x,y)=>parseFechaAR(x.fecha)-parseFechaAR(y.fecha));
       const rows=items.map(d=>
         `<tr><td class="op-name">${d.planilla}</td><td>${d.fecha}</td>`+
         `<td>${d.transportista||'—'}</td><td class="num">${d.guias}</td>`+
@@ -783,6 +822,38 @@ function abrirMetricas(){
     }).join('');
   }
   mostrarVista('metricas');
+}
+
+// ---- Semana actual (lunes 00:00 en adelante) ----
+function inicioSemana(d){
+  const x=new Date(d); const dia=(x.getDay()+6)%7; // 0 = lunes
+  x.setHours(0,0,0,0); x.setDate(x.getDate()-dia); return x;
+}
+function parseFechaAR(s){ const [dd,mm,yy]=String(s).split('/').map(Number); return new Date(yy,mm-1,dd); }
+function enSemanaActual(fechaStr){ return parseFechaAR(fechaStr) >= inicioSemana(new Date()); }
+
+// ---- Exportar a Excel (semana actual) ----
+function exportarMetricas(){
+  const data = DESPACHOS.filter(d=>enSemanaActual(d.fecha));
+  if(!data.length){ alert('No hay despachos en la semana para exportar.'); return; }
+  // Hoja Detalle (una fila por despacho)
+  const detalle = data.map(d=>({
+    Operador:d.usuario, Planilla:d.planilla, Fecha:d.fecha, Transportista:d.transportista||'',
+    Guias:d.guias, Bultos:d.bultos, Tiempo:fmtDur(d.duracionSeg)
+  }));
+  // Hoja Resumen (por operador)
+  const agg=new Map();
+  data.forEach(d=>{ if(!agg.has(d.usuario)) agg.set(d.usuario,{Operador:d.usuario,Planillas:0,Bultos:0,_t:0});
+    const a=agg.get(d.usuario); a.Planillas++; a.Bultos+=d.bultos; a._t+=d.duracionSeg; });
+  const resumen=[...agg.values()].map(a=>({
+    Operador:a.Operador, Planillas:a.Planillas, Bultos:a.Bultos,
+    'Tiempo total':fmtDur(a._t), 'Prom/planilla':fmtDur(Math.round(a._t/a.Planillas))
+  }));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), 'Resumen');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Detalle');
+  const hoy=new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `metricas_semana_${hoy}.xlsx`);
 }
 
 // =====================================================================

@@ -62,8 +62,10 @@ El backend queda en `http://localhost:3001`.
 | GET    | `/api/planillas/:numero`   | Trae UNA planilla de Presis por número, la cachea y la devuelve normalizada |
 | POST   | `/api/escaneos`            | Registra un bulto. Valida el Modelo A. Marca el inicio del control |
 | POST   | `/api/despachos`           | Confirma el despacho. Guarda quién, cuándo y cuánto tardó  |
-| GET    | `/api/metricas/operadores` | Resumen por operador: planillas, bultos, tiempo, promedio |
-| GET    | `/api/metricas/despachos?fecha=` | Detalle: qué planilla despachó cada operador y cuándo (filtrable por día) |
+| POST   | `/api/guias/quitar`        | Quita una guía faltante (no cuenta para el cierre). Body: `{hojaRutaId, numeroGuia, usuarioId, motivo}` |
+| GET    | `/api/metricas/operadores?desde=&hasta=` | Resumen por operador (por defecto, semana actual) |
+| GET    | `/api/metricas/despachos?desde=&hasta=` | Detalle: qué planilla despachó cada operador (por defecto, semana actual) |
+| GET    | `/api/metricas/export?desde=&hasta=` | Descarga un Excel (Resumen + Detalle) de la semana |
 | POST   | `/api/escaneos`          | Registra un bulto. Valida el Modelo A. Body: `{hojaRutaId, numeroGuia, usuarioId}` |
 | POST   | `/api/despachos`         | Confirma el despacho (solo si no faltan bultos). Body: `{hojaRutaId, usuarioId}` |
 | GET    | `/health`                | Chequeo de estado                                          |
@@ -104,7 +106,11 @@ Como el backend ya devuelve el mismo formato que usa la pantalla, no hay que toc
   columna `pin` por `password_hash` (bcrypt/argon2) y un token de sesión.
 - **Métricas por operador**: cada despacho guarda `usuario_id`, `iniciado_en`,
   `confirmado_en` y `duracion_segundos`. El inicio se marca en el primer escaneo.
-  La vista `v_metricas_operador` arma los totales (planillas, bultos, tiempo, bultos/min).
+- **Semana limpia**: las métricas se consultan por SEMANA (por defecto desde el
+  lunes), así cada semana arranca en cero SIN borrar el historial. Si además querés
+  el borrado real de datos viejos, programá un job (cron o n8n) que corra los
+  domingos; tené en cuenta que eso elimina la posibilidad de consultar semanas
+  anteriores y la auditoría. Recomendado: dejar los datos y filtrar por semana.
 - **Modelo A**: cada bulto físico es una fila en `escaneo`. No hay `UNIQUE` sobre
   (guía, código) porque el mismo número se repite por bulto. El tope se valida con
   un `SELECT ... FOR UPDATE` (serializa escaneos de la misma guía) y un trigger de

@@ -15,7 +15,7 @@
 -- Tipos enumerados (estados de la operación)
 -- ---------------------------------------------------------------------
 CREATE TYPE estado_hoja_ruta AS ENUM ('abierta', 'en_control', 'despachada', 'anulada');
-CREATE TYPE tipo_incidencia  AS ENUM ('guia_no_asignada', 'bulto_sobrante', 'cierre_con_diferencia');
+CREATE TYPE tipo_incidencia  AS ENUM ('guia_no_asignada', 'bulto_sobrante', 'cierre_con_diferencia', 'guia_faltante');
 
 -- ---------------------------------------------------------------------
 -- Usuarios del módulo (operadores / supervisores)
@@ -76,6 +76,8 @@ CREATE TABLE guia (
     presis_id         VARCHAR(60),
     bultos_esperados  INTEGER NOT NULL CHECK (bultos_esperados >= 1),
     zona              VARCHAR(120),
+    removida          BOOLEAN NOT NULL DEFAULT FALSE,  -- guía quitada por faltante
+    motivo_removida   TEXT,
     creado_en         TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- Una misma guía no se repite dentro de la misma hoja de ruta.
     CONSTRAINT uq_guia_por_hoja UNIQUE (hoja_ruta_id, numero_guia)
@@ -163,14 +165,17 @@ SELECT  g.id                AS guia_id,
         (COUNT(e.id) >= g.bultos_esperados) AS completa
 FROM    guia g
 LEFT JOIN escaneo e ON e.guia_id = g.id
+WHERE   g.removida = FALSE          -- las guías quitadas no cuentan
 GROUP BY g.id;
 
 -- VISTA: totales por hoja de ruta (KPIs de la sesión y gate de cierre).
+-- Los esperados se DERIVAN de las guías vigentes: si se quita una guía
+-- faltante, los bultos esperados bajan solos y se puede cerrar.
 CREATE VIEW v_progreso_hoja AS
 SELECT  h.id AS hoja_ruta_id,
-        h.total_bultos_esperados,
+        COALESCE(SUM(p.bultos_esperados), 0)               AS total_bultos_esperados,
         COALESCE(SUM(p.bultos_controlados), 0)             AS bultos_controlados,
-        h.total_bultos_esperados
+        COALESCE(SUM(p.bultos_esperados), 0)
           - COALESCE(SUM(p.bultos_controlados), 0)         AS bultos_faltantes,
         COUNT(p.guia_id) FILTER (WHERE p.completa)          AS guias_completas,
         COUNT(p.guia_id)                                    AS guias_totales
