@@ -436,15 +436,42 @@ drop.onclick = ()=> fileInput.click();
 drop.addEventListener('drop', e=>{ if(e.dataTransfer.files.length) leerArchivos(e.dataTransfer.files); });
 fileInput.addEventListener('change', e=>{ if(e.target.files.length) leerArchivos(e.target.files); });
 
-// Saca número de planilla y fecha del nombre del archivo (formato Presis).
-// Ej: "30_06_2026_570102026-06-30.xls" -> planilla 57010, fecha 2026-06-30
+// Saca planilla, fecha y transportista del nombre del archivo.
+// Formato nuevo: "03_07_2026_planilla_57259_trasportista_molina_jose.xls"
+//   -> fecha 03/07/2026 · planilla 57259 · transportista Molina Jose
+// Mantiene compatibilidad con el formato viejo (número pegado a la fecha ISO).
 function metaDeNombre(fn){
   const base = String(fn).replace(/\.[^.]+$/,'');
-  const m = base.match(/(\d{4}-\d{2}-\d{2})$/);
-  const fecha = m ? m[1] : '';
-  const ult = base.split('_').pop() || base;
-  const planilla = fecha ? ult.slice(0, -10) : ult;
-  return { planilla: (planilla || base), fecha };
+  const tk = base.split('_');
+  const low = tk.map(t=>t.toLowerCase());
+  const titulo = s => s.replace(/\b\w/g, c=>c.toUpperCase()).trim();
+
+  // fecha: dd_mm_aaaa al inicio, o ISO (aaaa-mm-dd) en cualquier lado
+  let fecha='';
+  if(/^\d{2}$/.test(tk[0]) && /^\d{2}$/.test(tk[1]) && /^\d{4}$/.test(tk[2])){
+    fecha = `${tk[0]}/${tk[1]}/${tk[2]}`;
+  } else {
+    const m = base.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if(m) fecha = `${m[3]}/${m[2]}/${m[1]}`;
+  }
+
+  // planilla: token que sigue a "planilla"
+  let planilla='';
+  const ip = low.indexOf('planilla');
+  if(ip>=0 && tk[ip+1]) planilla = tk[ip+1];
+
+  // transportista: todo lo que sigue a "transportista" / "trasportista"
+  let transportista='';
+  const it = low.findIndex(t=>t==='transportista'||t==='trasportista');
+  if(it>=0) transportista = titulo(tk.slice(it+1).join(' '));
+
+  // Fallback formato viejo: número pegado a la fecha ISO al final
+  if(!planilla){
+    const ult = tk[tk.length-1] || base;
+    const mIso = base.match(/(\d{4}-\d{2}-\d{2})$/);
+    planilla = mIso ? ult.slice(0,-10) : ult;
+  }
+  return { planilla: planilla||base, fecha, transportista };
 }
 
 function leerArchivos(fileList){
@@ -518,14 +545,17 @@ function parsePresis(aoa, idx, filename){
     const f=aoa[r]; if(!f||f.every(c=>String(c).trim()==='')) continue;
     const guia=String(f[idx.guia]).trim();
     if(!/^\d/.test(guia)) continue; // saltea filas que no son guía (totales, etc.)
-    const bultos=parseInt(String(f[idx.bultos]).trim(),10);
-    if(!Number.isInteger(bultos)||bultos<1){errores.push(`${filename} fila ${r+1} (guía ${guia}): bultos inválido.`);continue;}
+    let bultos=parseInt(String(f[idx.bultos]).trim(),10);
+    if(!Number.isInteger(bultos)||bultos<1){
+      bultos=1; // BULTOS REALES vacío -> se asume 1 para no perder la guía
+      errores.push(`${filename}: guía ${guia} sin BULTOS REALES, se tomó 1.`);
+    }
     guias.push({ numero:guia, esperados:bultos,
       zona: idx.zona_guia>=0&&f[idx.zona_guia]?String(f[idx.zona_guia]).trim():'' });
   }
   if(!guias.length) return { planillas:[], errores:errores.concat([`${filename}: sin guías válidas.`]) };
   return { planillas:[{
-    hojaId: meta.planilla, transportista:'', zona:'', fecha: meta.fecha, guias, estado:'pendiente'
+    hojaId: meta.planilla, transportista: meta.transportista||'', zona:'', fecha: meta.fecha, guias, estado:'pendiente'
   }], errores };
 }
 

@@ -22,15 +22,37 @@ const COLUMNAS = {
   zona_guia:     ['zona_guia', 'zona guia', 'localidad'],
 };
 
-// Saca planilla y fecha del nombre del archivo (formato Presis).
-// "30_06_2026_570102026-06-30.xls" -> { planilla:'57010', fecha:'2026-06-30' }
+// Saca planilla, fecha (ISO) y transportista del nombre del archivo.
+// "03_07_2026_planilla_57259_trasportista_molina_jose.xls"
+//   -> { planilla:'57259', fecha:'2026-07-03', transportista:'Molina Jose' }
 function metaDeNombre(fn) {
   const base = String(fn || '').replace(/\.[^.]+$/, '');
-  const m = base.match(/(\d{4}-\d{2}-\d{2})$/);
-  const fecha = m ? m[1] : null;
-  const ult = base.split('_').pop() || base;
-  const planilla = fecha ? ult.slice(0, -10) : ult;
-  return { planilla: planilla || base, fecha };
+  const tk = base.split('_');
+  const low = tk.map((t) => t.toLowerCase());
+  const titulo = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+
+  let fecha = null;
+  if (/^\d{2}$/.test(tk[0]) && /^\d{2}$/.test(tk[1]) && /^\d{4}$/.test(tk[2])) {
+    fecha = `${tk[2]}-${tk[1]}-${tk[0]}`;                 // dd_mm_aaaa -> aaaa-mm-dd
+  } else {
+    const m = base.match(/(\d{4}-\d{2}-\d{2})/);
+    if (m) fecha = m[1];
+  }
+
+  let planilla = '';
+  const ip = low.indexOf('planilla');
+  if (ip >= 0 && tk[ip + 1]) planilla = tk[ip + 1];
+
+  let transportista = '';
+  const it = low.findIndex((t) => t === 'transportista' || t === 'trasportista');
+  if (it >= 0) transportista = titulo(tk.slice(it + 1).join(' '));
+
+  if (!planilla) {                                        // fallback formato viejo
+    const ult = tk[tk.length - 1] || base;
+    const mIso = base.match(/(\d{4}-\d{2}-\d{2})$/);
+    planilla = mIso ? ult.slice(0, -10) : ult;
+  }
+  return { planilla: planilla || base, fecha, transportista };
 }
 
 const norm = (s) => String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' ');
@@ -102,14 +124,17 @@ router.post('/importar', upload.single('archivo'), async (req, res) => {
       if (!f || f.every((c) => String(c).trim() === '')) continue;
       const guia = String(f[idx.guia]).trim();
       if (!/^\d/.test(guia)) continue; // saltea totales / filas no-guía
-      const bultos = parseInt(String(f[idx.bultos]).trim(), 10);
-      if (!Number.isInteger(bultos) || bultos < 1) { errores.push(`Fila ${r + 1} (guía ${guia}): bultos inválido.`); continue; }
+      let bultos = parseInt(String(f[idx.bultos]).trim(), 10);
+      if (!Number.isInteger(bultos) || bultos < 1) {
+        bultos = 1; // BULTOS REALES vacío -> se asume 1 para no perder la guía
+        errores.push(`Guía ${guia} sin BULTOS REALES, se tomó 1.`);
+      }
       guias.push({ numero: guia, esperados: bultos, zona: idx.zona_guia >= 0 && f[idx.zona_guia] ? String(f[idx.zona_guia]).trim() : null });
     }
     if (guias.length) {
       planillas = [{
         presisId: meta.planilla, numeroPlanilla: meta.planilla,
-        transportista: req.body.transportista || 'Sin asignar', // <<< el transportista NO viene en el Excel
+        transportista: meta.transportista || req.body.transportista || 'Sin asignar', // del nombre del archivo
         zona: null, fecha: meta.fecha, guias,
       }];
     }
