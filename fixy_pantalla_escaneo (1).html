@@ -1,3 +1,41 @@
+<!--
+  =======================================================================
+  FIXY · PANTALLA DE CONTROL DE DESPACHO — PROTOTIPO FRONTEND
+  =======================================================================
+  QUÉ ES ESTE ARCHIVO:
+  Un prototipo standalone (HTML+CSS+JS, un solo archivo, sin build ni
+  dependencias de servidor) que simula el flujo completo del operador:
+  login -> importar Excel -> elegir planilla -> escanear bultos
+  (Modelo A) -> confirmar despacho -> ver métricas.
+
+  ESTADO ACTUAL (importante para escalar):
+  Todo vive en memoria del navegador (variables JS: USUARIOS, DESPACHOS,
+  PLANILLAS, etc.). No hay fetch() a ningún backend todavía. Si recargás
+  la página, se pierde todo. Esto es intencional para poder mostrar/probar
+  la UX sin depender del backend, pero para producción hay que reemplazar
+  estos puntos por llamadas reales al backend de src/ (ver README.md):
+
+    Pieza mock en este HTML          Reemplazar por
+    --------------------------------------------------------------------
+    const USUARIOS = [...]        -> GET  /api/usuarios
+    validarPin()                  -> POST /api/usuarios/login
+    leerArchivos/procesarArchivo  -> POST /api/planillas/importar
+      (el parseo de Excel puede quedar acá en el cliente, o mandarse
+       tal cual el archivo al backend y que Presis/importar.js lo parsee)
+    scan()                        -> POST /api/escaneos
+    confirmar despacho (on click) -> POST /api/despachos
+    quitarGuia()                  -> POST /api/guias/quitar
+    const DESPACHOS = [...]       -> GET  /api/metricas/operadores
+                                      GET  /api/metricas/despachos
+    exportarMetricas()            -> GET  /api/metricas/export
+                                      (o mantener el export client-side
+                                       con los datos ya traídos del backend)
+
+  Mientras se conecta el backend real, cada función que simula estos
+  endpoints tiene un comentario "BACKEND:" indicando el endpoint exacto
+  que la debería reemplazar.
+  =======================================================================
+-->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -188,7 +226,15 @@
     <div class="hdr-right" id="hdr-right"></div>
   </header>
 
-  <!-- ===== VISTA 0: LOGIN ===== -->
+  <!-- =====================================================================
+       VISTA 0: LOGIN
+       Selección de operador + teclado numérico de PIN (no es una password
+       real, solo identifica quién despacha para las métricas).
+       BACKEND: reemplazar la lista USUARIOS (más abajo, en <script>) por
+       GET /api/usuarios, y validarPin() por POST /api/usuarios/login.
+       Los supervisores (rol:'supervisor') entran directo a Métricas;
+       los operadores van a Importar.
+  ===================================================================== -->
   <section id="view-login">
     <div class="login">
       <div id="op-select">
@@ -208,7 +254,19 @@
     </div>
   </section>
 
-  <!-- ===== VISTA 1: IMPORTAR EXCEL ===== -->
+  <!-- =====================================================================
+       VISTA 1: IMPORTAR EXCEL
+       Drag&drop o file picker para subir uno o varios .xls/.xlsx (uno por
+       planilla, formato Presis). El parseo hoy es 100% client-side con
+       la librería xlsx.full.min.js (ver leerArchivos/procesarArchivo en
+       el <script>).
+       BACKEND: esto reemplaza/complementa a POST /api/planillas/importar.
+       Se puede: (a) mandar el archivo tal cual al backend y que lo parsee
+       src/routes/importar.js, o (b) seguir parseando acá y mandar el JSON
+       ya normalizado al backend para persistirlo. Ojo con mantener el
+       mapeo de columnas (objeto COLUMNAS) sincronizado en ambos lados si
+       se elige la opción (b).
+  ===================================================================== -->
   <section id="view-import" class="hidden">
     <div class="imp">
       <h1>Importar planillas del día</h1>
@@ -224,7 +282,17 @@
     </div>
   </section>
 
-  <!-- ===== VISTA 2: LISTA DE PLANILLAS ===== -->
+  <!-- =====================================================================
+       VISTA 2: LISTA DE PLANILLAS
+       Muestra las planillas importadas como tarjetas (pendiente/despachada).
+       Acá el operador elige cuál controlar y puede asignar el transportista
+       al vuelo (prompt()).
+       BACKEND: hoy PLANILLAS es la variable en memoria que llenó el Excel.
+       En producción, reemplazar por GET /api/planillas?fecha= (lista) y
+       GET /api/planillas/:numero (al entrar a controlar una en particular).
+       El botón "Métricas por operador" solo se muestra si USUARIO.rol es
+       'supervisor' (ver abrirLista() en el <script>).
+  ===================================================================== -->
   <section id="view-list" class="hidden">
     <div class="list-head">
       <h2>Planillas del día</h2>
@@ -235,7 +303,17 @@
     <div class="grid" id="grid"></div>
   </section>
 
-  <!-- ===== VISTA 4: MÉTRICAS POR OPERADOR (solo supervisor) ===== -->
+  <!-- =====================================================================
+       VISTA 4: MÉTRICAS POR OPERADOR (solo supervisor)
+       Agrupa los despachos de la SEMANA ACTUAL (lunes 00:00 en adelante)
+       por operador: cuántas planillas, bultos y tiempo total/promedio.
+       BACKEND: reemplazar el array DESPACHOS (en el <script>) por
+       GET /api/metricas/operadores?desde=&hasta= (para el resumen) y
+       GET /api/metricas/despachos?desde=&hasta= (para el detalle por
+       planilla). El botón "Exportar a Excel" hoy arma el .xlsx en el
+       cliente (exportarMetricas()); se puede reemplazar por
+       GET /api/metricas/export, que ya devuelve el archivo armado.
+  ===================================================================== -->
   <section id="view-metricas" class="hidden">
     <div class="list-head">
       <h2>Métricas por operador</h2>
@@ -247,6 +325,19 @@
     <div id="met-body"></div>
   </section>
 
+  <!-- =====================================================================
+       VISTA 3: CONTROL (pantalla principal, Modelo A)
+       El operador escanea bulto por bulto. Cada lectura suma 1 al contador
+       de esa guía (no hay UNIQUE por código porque el mismo número se
+       repite una vez por bulto — igual que en la base real, ver README).
+       Estructura: feedback grande arriba (ok/warn/err) + contadores +
+       input de escaneo + lista de guías con su progreso + incidencias.
+       BACKEND: cada scan() debería disparar POST /api/escaneos, y
+       quitarGuia() -> POST /api/guias/quitar. El botón CONFIRMAR DESPACHO
+       (footer) solo se habilita cuando faltan===0 y debería disparar
+       POST /api/despachos (que además dispara el webhook a n8n del lado
+       del servidor, después del commit).
+  ===================================================================== -->
   <!-- ===== VISTA 3: CONTROL ===== -->
   <div id="view-control" class="hidden" style="display:flex;flex-direction:column;flex:1">
     <div class="feedback" id="fb">
@@ -308,9 +399,14 @@ const USUARIOS = [
   { id: 6, nombre: 'Sofía Acosta',   rol: 'supervisor', pin: '1234' },
 ];
 let USUARIO = null;           // operador logueado
-// Registros de despacho (para métricas). En producción salen del backend.
+
+// ---- Registros de despacho (mock para METRICAS) --------------------------
+// BACKEND: este array reemplaza a GET /api/metricas/despachos. Cuando se
+// conecte el backend, DESPACHOS pasa a llenarse con la respuesta del fetch
+// (mismo shape: usuarioId, usuario, planilla, transportista, guias, bultos,
+// duracionSeg, fecha) en vez de empujarse acá con .push() en confirmarDespacho.
 // Estos primeros son DE EJEMPLO (fechas dentro de la semana actual) para que
-// el supervisor vea la pantalla al entrar.
+// el supervisor vea la pantalla con datos al entrar.
 const _hoyAR = new Date().toLocaleDateString('es-AR');
 const _lunAR = inicioSemana(new Date()).toLocaleDateString('es-AR');
 const DESPACHOS = [
@@ -440,6 +536,13 @@ fileInput.addEventListener('change', e=>{ if(e.target.files.length) leerArchivos
 // Formato nuevo: "03_07_2026_planilla_57259_trasportista_molina_jose.xls"
 //   -> fecha 03/07/2026 · planilla 57259 · transportista Molina Jose
 // Mantiene compatibilidad con el formato viejo (número pegado a la fecha ISO).
+//
+// ESCALABILIDAD: esto es un parseo de nombre de archivo, así que es frágil
+// (depende de que Presis siga exportando con el mismo patrón de guiones
+// bajos). Si el nombre cambia, esta función deja de reconocer planilla/
+// fecha/transportista sin tirar error visible. Si en algún momento el
+// Excel de Presis trae estos datos en columnas (en vez de en el nombre),
+// conviene leerlos directo de ahí y dejar esta función solo como fallback.
 function metaDeNombre(fn){
   const base = String(fn).replace(/\.[^.]+$/,'');
   const tk = base.split('_');
@@ -502,7 +605,15 @@ function leerArchivos(fileList){
   });
 }
 
-// Detecta el formato y devuelve { planillas:[...], errores:[...] }
+// Detecta el formato y devuelve { planillas:[...], errores:[...] }.
+// Soporta DOS formatos de Excel (se elige según qué columnas encuentra):
+//   Formato A "agrupado": el archivo ya trae una columna 'planilla', o sea
+//     puede traer VARIAS planillas mezcladas en un solo archivo -> parseAgrupado.
+//   Formato B "Presis": un archivo = una sola planilla, y los metadatos
+//     (planilla/fecha/transportista) salen del NOMBRE del archivo, no de
+//     columnas -> parsePresis (ver metaDeNombre arriba).
+// Si se agrega un tercer proveedor/formato en el futuro, el patrón es:
+// sumar sus alias de columna a COLUMNAS y un nuevo `if(...) return parseX(...)`.
 function procesarArchivo(aoa, filename){
   if(!aoa.length) return { planillas:[], errores:[`${filename}: archivo vacío.`] };
   const headers = aoa[0];
@@ -646,6 +757,13 @@ function mostrarVista(v){
 let hojaRuta=null, counts={}, incidents=[], despachado=false;
 let totalGuias=0, totalBultos=0, byNum={}, planillaActual=null, inicioControl=null;
 
+// Arranca el control de UNA planilla: resetea contadores/incidencias,
+// marca el inicio del cronómetro (inicioControl) que después se usa para
+// calcular duracionSeg al confirmar el despacho, y arma los "chips" de
+// simulación (para probar sin lector de código de barras conectado).
+// BACKEND: acá es donde, al conectar el backend real, correspondería un
+// GET /api/planillas/:numero para traer la planilla ya normalizada
+// (en vez de usar directamente el objeto `p` que vino del Excel local).
 function iniciarControl(p){
   planillaActual=p; hojaRuta=p;
   counts={}; incidents=[]; despachado=false;
@@ -680,6 +798,16 @@ function iniciarControl(p){
   mostrarVista('control'); render(); refocus();
 }
 
+// Registra UN bulto escaneado (Modelo A: cada lectura = un bulto físico).
+// Tres casos posibles:
+//   1) código no está en la planilla -> incidencia "guia_no_asignada"
+//   2) la guía ya llegó a su cantidad "esperados" -> incidencia "bulto_sobrante"
+//   3) suma 1 al contador de esa guía (verde si queda completa, naranja si
+//      todavía faltan bultos de esa misma guía)
+// BACKEND: reemplazar por POST /api/escaneos con {hojaRutaId, numeroGuia,
+// usuarioId}; ahí el backend hace el SELECT...FOR UPDATE que serializa
+// escaneos de la misma guía (acá en el prototipo no hace falta porque es
+// un solo hilo de UI, pero en el backend real sí, por concurrencia).
 function scan(raw){
   if(despachado) return;
   const code=(raw||'').trim(); if(!code) return;
@@ -730,6 +858,12 @@ function quitarGuia(numero){
   feedback('warn','&#8722;',`Guía ${numero} quitada`,'Registrada como faltante. Seguí con el resto y cerrá cuando esté todo.');
   render();
 }
+// Redibuja TODA la vista de control a partir del estado en memoria
+// (counts, hojaRuta, incidents). Es el equivalente en el prototipo a lo
+// que en el backend serían las vistas derivadas v_progreso_guia /
+// v_progreso_hoja: acá también los conteos se recalculan siempre desde
+// counts{} en vez de guardarse en una variable aparte, para no desincronizar.
+// También decide si el botón CONFIRMAR se habilita (faltan===0).
 function render(){
   const bultosCtrl=Object.values(counts).reduce((a,b)=>a+b,0);
   const guiasComp=hojaRuta.guias.filter(g=>counts[g.numero]>=g.esperados).length;
@@ -766,6 +900,15 @@ function render(){
   else{btn.classList.remove('ready');btn.disabled=true;gate.innerHTML=`No se puede cerrar: faltan <b>${faltan}</b> bulto(s).`;}
 }
 
+// Confirma el despacho: solo puede ejecutarse si el botón no está
+// disabled (o sea, faltan===0, ver render()). Calcula la duración total
+// desde inicioControl, empuja un registro a DESPACHOS (mock de métricas)
+// y bloquea la pantalla (despachado=true) para que no se pueda re-escanear.
+// BACKEND: reemplazar el bloque `DESPACHOS.push(...)` por
+// POST /api/despachos {hojaRutaId, usuarioId}; el backend guarda
+// usuario_id/iniciado_en/confirmado_en/duracion_segundos y dispara el
+// webhook a n8n DESPUÉS del commit (si n8n falla, el despacho ya quedó
+// confirmado igual — ver README).
 document.getElementById('confirm').onclick=()=>{
   const btn=document.getElementById('confirm'); if(btn.disabled) return;
   despachado=true;
@@ -810,6 +953,12 @@ function fmtDur(seg){
   const m=Math.floor(seg/60), s=seg%60;
   return m>0 ? `${m}m ${s}s` : `${s}s`;
 }
+// Arma la vista de métricas agrupando DESPACHOS por operador, filtrado a
+// la semana actual (enSemanaActual). Todo el agregado (suma de bultos,
+// tiempo total, promedio) se hace acá en el cliente sobre el array mock.
+// BACKEND: si se conecta GET /api/metricas/operadores, ese endpoint ya
+// devuelve el resumen agregado y esta función se simplifica a solo
+// pintar la respuesta (sin recalcular sumas/promedios en el cliente).
 function abrirMetricas(){
   setHeader('');
   document.getElementById('crumb').textContent='Métricas';
@@ -863,6 +1012,11 @@ function parseFechaAR(s){ const [dd,mm,yy]=String(s).split('/').map(Number); ret
 function enSemanaActual(fechaStr){ return parseFechaAR(fechaStr) >= inicioSemana(new Date()); }
 
 // ---- Exportar a Excel (semana actual) ----
+// Arma un .xlsx con dos hojas (Resumen + Detalle) a partir de DESPACHOS,
+// usando la misma librería xlsx.full.min.js del importador.
+// BACKEND: GET /api/metricas/export ya devuelve el Excel armado del lado
+// del servidor con la misma estructura (Resumen + Detalle); al conectarlo,
+// esta función pasa a ser simplemente abrir/descargar esa URL.
 function exportarMetricas(){
   const data = DESPACHOS.filter(d=>enSemanaActual(d.fecha));
   if(!data.length){ alert('No hay despachos en la semana para exportar.'); return; }
