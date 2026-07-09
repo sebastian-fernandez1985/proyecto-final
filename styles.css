@@ -169,9 +169,9 @@
   .btn-sm:hover{filter:brightness(1.06)}
   @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 
-  /* ===== MARCA DE AGUA — fondo pantalla de control ===== */
-  #view-control{position:relative}
-  #view-control::before{
+  /* ===== MARCA DE AGUA — fondo pantalla de control y login ===== */
+  #view-control,#view-login{position:relative}
+  #view-control::before,#view-login::before{
     content:'';
     position:absolute; inset:0;
     background-image:url('assets/logo.png');
@@ -182,4 +182,4 @@
     pointer-events:none;
     z-index:0;
   }
-  #view-control > *{position:relative;z-index:1}
+  #view-control > *,#view-login > *{position:relative;z-index:1}
