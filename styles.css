@@ -169,6 +169,30 @@
   .btn-sm:hover{filter:brightness(1.06)}
   @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 
+  /* ===== MODAL DE AVISO — guía de varios bultos ===== */
+  #modal-aviso{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,10,15,.72);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .12s}
+  #modal-aviso.show{opacity:1;pointer-events:auto}
+  #modal-aviso .box{width:100%;max-width:420px;margin:0 20px;border-radius:20px;padding:32px 30px;text-align:center;
+    background:var(--panel);border:2px solid var(--warn);box-shadow:0 20px 60px rgba(0,0,0,.5);
+    transform:scale(.94);transition:transform .12s}
+  #modal-aviso.show .box{transform:scale(1)}
+  #modal-aviso.err .box{border-color:var(--err)}
+  #modal-aviso.ok .box{border-color:var(--ok)}
+  #modal-aviso .m-icon{font-size:52px;line-height:1;margin-bottom:14px}
+  #modal-aviso.warn .m-icon{color:var(--warn)}
+  #modal-aviso.err .m-icon{color:var(--err)}
+  #modal-aviso.ok .m-icon{color:var(--ok)}
+  #modal-aviso .m-msg{font-family:'Space Grotesk';font-weight:700;font-size:26px;margin-bottom:8px}
+  #modal-aviso .m-sub{color:var(--muted);font-size:15px;line-height:1.4}
+  #modal-aviso .m-code{font-family:'JetBrains Mono';color:var(--brand);font-weight:700}
+  #modal-aviso .m-bar{margin-top:22px;height:4px;border-radius:4px;background:var(--panel-2);overflow:hidden}
+  #modal-aviso .m-bar i{display:block;height:100%;background:var(--warn);width:100%;transform-origin:left;
+    animation:mbar linear forwards}
+  #modal-aviso.err .m-bar i{background:var(--err)}
+  #modal-aviso.ok .m-bar i{background:var(--ok)}
+  @keyframes mbar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+
   /* ===== MARCA DE AGUA — fondo pantalla de control y login ===== */
   #view-control,#view-login{position:relative}
   #view-control::before,#view-login::before{
