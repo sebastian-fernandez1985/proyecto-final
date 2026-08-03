@@ -1,0 +1,878 @@
+<!-- Pantalla de control de despacho. Prototipo sin backend: todo vive en
+     memoria (USUARIOS, PLANILLAS, DESPACHOS). Ver README del backend para
+     conectar cada endpoint. -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIXY · Control de Despacho</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <img src="assets/logo.png" alt="FIXY" class="logo-img">
+    <div class="logo"><b>FIXY</b> · Despacho</div>
+    <div class="crumb" id="crumb">Iniciar sesión</div>
+    <div class="hdr-right" id="hdr-right"></div>
+  </header>
+
+  <!-- Login: elegís operador + PIN numérico (no es password, solo identifica
+       quién despacha para las métricas). Supervisor entra directo a Métricas. -->
+  <section id="view-login">
+    <div class="login">
+      <img src="assets/logo.png" alt="FIXY" class="login-logo">
+      <div id="op-select">
+        <h1>¿Quién está despachando?</h1>
+        <p>Seleccioná tu usuario para identificar el despacho.</p>
+        <div class="ops" id="ops"></div>
+      </div>
+      <div id="pin-panel" class="hidden">
+        <div class="pin-who" id="pin-who"></div>
+        <p style="margin:0 0 4px">Ingresá tu PIN</p>
+        <div class="pin-dots" id="pin-dots"></div>
+        <div class="keypad" id="keypad"></div>
+        <div class="pin-err" id="pin-err"></div>
+        <button class="link" id="pin-back" style="margin-top:14px">&larr; Cambiar de usuario</button>
+        <div class="pin-hint">Demo: el PIN de cada usuario es <b>1234</b>.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Importar: drag&drop de uno o varios .xls/.xlsx (formato Presis).
+       Parseo client-side con xlsx.full.min.js (leerArchivos/procesarArchivo). -->
+  <section id="view-import" class="hidden">
+    <div class="imp">
+      <img src="assets/logo.png" alt="FIXY" class="imp-logo">
+      <h1>Importar planillas del día</h1>
+      <p>Subí el Excel con todas las planillas de recorrido. Después elegís cuál controlar.</p>
+      <div class="drop" id="drop">
+        <div class="ico">&#8682;</div>
+        <div class="big">Arrastrá los Excel acá o hacé clic para elegir</div>
+        <div class="small">Podés subir varios .xls/.xlsx (uno por planilla)</div>
+      </div>
+      <input type="file" id="file" accept=".xlsx,.xls" class="hidden" multiple />
+      <div class="imp-note">Cada archivo de Presis es una planilla. Se toma la guía (col B) y los bultos de <b>BULTOS REALES (col F)</b>. La planilla y la fecha salen del nombre del archivo.</div>
+      <div class="errors hidden" id="errors"></div>
+    </div>
+  </section>
+
+  <!-- Lista de planillas importadas (pendiente/despachada). Acá se elige
+       cuál controlar y se puede asignar transportista al vuelo. -->
+  <section id="view-list" class="hidden">
+    <div class="list-head">
+      <h2>Planillas del día</h2>
+      <div class="sub" id="list-sub"></div>
+      <button class="link" id="ver-metricas" style="margin-left:auto">Métricas por operador</button>
+      <button class="link" id="reimport">&larr; Importar otro archivo</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <!-- Métricas por operador (solo supervisor), agrupadas por semana actual. -->
+  <section id="view-metricas" class="hidden">
+    <div class="list-head">
+      <h2>Métricas por operador</h2>
+      <div class="sub" id="met-sub"></div>
+      <button class="btn-sm" id="met-export" style="margin-left:auto">⤓ Exportar a Excel</button>
+      <button class="link" id="met-despachar">Cargar / despachar planillas &rarr;</button>
+      <button class="link hidden" id="met-volver">Volver a la lista</button>
+    </div>
+    <div id="met-body"></div>
+  </section>
+
+  <!-- Control (Modelo A): el operador escanea bulto por bulto, cada
+       lectura suma 1 al contador de esa guía. -->
+  <div id="view-control" class="hidden" style="display:flex;flex-direction:column;flex:1">
+    <div class="feedback" id="fb">
+      <div class="icon" id="fb-icon">&#9678;</div>
+      <div>
+        <div class="msg" id="fb-msg">Listo para escanear</div>
+        <div class="sub" id="fb-sub">Escaneá el primer bulto de la hoja de ruta</div>
+      </div>
+    </div>
+    <main>
+      <section>
+        <div class="counters">
+          <div class="counter"><div class="n" id="c-guias">0<small>/0</small></div><div class="l">Guías completas</div></div>
+          <div class="counter"><div class="n" id="c-bultos">0<small>/0</small></div><div class="l">Bultos controlados</div></div>
+          <div class="counter faltan" id="c-faltan-box"><div class="n" id="c-faltan">0</div><div class="l">Bultos faltantes</div></div>
+        </div>
+        <div class="card">
+          <h2>Escaneo de bultos</h2>
+          <div class="scanbox">
+            <input id="scan" autocomplete="off" inputmode="none" placeholder="Escaneá o escribí el número de guía y Enter…" />
+          </div>
+          <div class="hint">El lector actúa como teclado: el foco vuelve solo a este campo. Cada lectura suma <b>un bulto</b> a su guía (Modelo A).</div>
+          <div class="demo">
+            <div class="lbl">Simular lecturas (no hay lector conectado)</div>
+            <div class="chips" id="chips"></div>
+          </div>
+        </div>
+      </section>
+      <section>
+        <div class="card" style="margin-bottom:18px">
+          <h2>Guías de la hoja de ruta</h2>
+          <div class="guides" id="guides"></div>
+        </div>
+        <div class="card">
+          <h2>Incidencias <span id="inc-count" style="color:var(--err)"></span></h2>
+          <div id="incidents"><div class="empty">Sin incidencias por ahora.</div></div>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <button class="link" id="volver">&larr; Volver a la lista</button>
+      <div class="gate" id="gate" style="margin-left:8px"></div>
+      <button class="confirm" id="confirm" style="margin-left:auto" disabled>CONFIRMAR DESPACHO</button>
+    </footer>
+  </div>
+
+  <!-- Modal grande de aviso: dos modos.
+       - Modo automático (bultos multi-paquete): se cierra solo con la barrita.
+       - Modo bloqueante (guía no asignada): no se cierra solo, no se cierra
+         clickeando afuera ni con ESC — el operador tiene que apretar el botón
+         después de separar físicamente el paquete. -->
+  <div id="modal-aviso">
+    <div class="box">
+      <div class="m-icon" id="m-icon">&#9888;</div>
+      <div class="m-msg" id="m-msg">Atento: son 2 bultos</div>
+      <div class="m-sub" id="m-sub">Guía <span class="m-code">000000000</span> · falta 1 bulto por escanear</div>
+      <div class="m-bar" id="m-bar-wrap"><i id="m-bar"></i></div>
+      <button class="m-btn hidden" id="m-btn">Continuar</button>
+    </div>
+  </div>
+
+  <!-- Modal de confirmación al eliminar una guía del recorrido. Obliga a
+       escribir un motivo (no se puede confirmar en blanco) para que quede
+       registrado en el historial del control / métricas del coordinador. -->
+  <div id="modal-quitar">
+    <div class="box">
+      <div class="m-icon" style="color:var(--err)">&#9888;</div>
+      <div class="m-msg">¿Eliminar la guía <span class="m-code" id="mq-code">000000000</span> del recorrido?</div>
+      <div class="m-sub">Va a quedar registrada como faltante y no se va a poder despachar en esta planilla. Esta acción queda guardada en el historial del control.</div>
+      <textarea id="mq-motivo" placeholder="Escribí el motivo por el que la sacás (obligatorio)…" rows="3"></textarea>
+      <div class="mq-err hidden" id="mq-err">Tenés que escribir un motivo antes de confirmar.</div>
+      <div class="mq-actions">
+        <button class="link" id="mq-cancel">Cancelar</button>
+        <button class="ctrl-btn" id="mq-ok" style="width:auto;padding:12px 22px">Confirmar eliminación</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+// Usuarios de prueba. En producción esto sale de GET /api/usuarios
+// y el PIN se valida con POST /api/login.
+const USUARIOS = [
+  { id: 1, nombre: 'Lucas Pereyra',  rol: 'operador',   pin: '1234' },
+  { id: 2, nombre: 'Marina Gómez',   rol: 'operador',   pin: '1234' },
+  { id: 3, nombre: 'Diego Sosa',     rol: 'operador',   pin: '1234' },
+  { id: 4, nombre: 'Carla Ríos',     rol: 'operador',   pin: '1234' },
+  { id: 5, nombre: 'Javier Núñez',   rol: 'operador',   pin: '1234' },
+  { id: 6, nombre: 'Sofía Acosta',   rol: 'supervisor', pin: '1234' },
+];
+let USUARIO = null;           // operador logueado
+
+// Mock de despachos para probar la pantalla de métricas. En producción
+// sale de GET /api/metricas/despachos (mismo shape).
+const _hoyAR = new Date().toLocaleDateString('es-AR');
+const _lunAR = inicioSemana(new Date()).toLocaleDateString('es-AR');
+const DESPACHOS = [
+  { usuarioId:1, usuario:'Lucas Pereyra', planilla:'57005', transportista:'Andreani',     guias:38, bultos:38, duracionSeg:512, fecha:_lunAR },
+  { usuarioId:1, usuario:'Lucas Pereyra', planilla:'57008', transportista:'OCA',          guias:41, bultos:43, duracionSeg:640, fecha:_hoyAR },
+  { usuarioId:2, usuario:'Marina Gómez',  planilla:'57006', transportista:'Andreani',     guias:35, bultos:36, duracionSeg:470, fecha:_lunAR },
+  { usuarioId:2, usuario:'Marina Gómez',  planilla:'57011', transportista:'Cruz del Sur', guias:52, bultos:55, duracionSeg:705, fecha:_hoyAR },
+  { usuarioId:3, usuario:'Diego Sosa',    planilla:'57009', transportista:'OCA',          guias:29, bultos:30, duracionSeg:388, fecha:_hoyAR },
+];
+
+const iniciales = n => n.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
+
+function renderLogin(){
+  const ops = document.getElementById('ops'); ops.innerHTML='';
+  USUARIOS.forEach(u=>{
+    const b=document.createElement('div'); b.className='op';
+    b.innerHTML=`<div class="av">${iniciales(u.nombre)}</div><div class="nm">${u.nombre}</div><div class="rl">${u.rol}</div>`;
+    b.onclick=()=>pedirPin(u);
+    ops.appendChild(b);
+  });
+  document.getElementById('op-select').classList.remove('hidden');
+  document.getElementById('pin-panel').classList.add('hidden');
+}
+
+let pinUser=null, pinBuf='';
+function pedirPin(u){
+  pinUser=u; pinBuf='';
+  document.getElementById('op-select').classList.add('hidden');
+  document.getElementById('pin-panel').classList.remove('hidden');
+  document.getElementById('pin-who').textContent=u.nombre;
+  document.getElementById('pin-err').textContent='';
+  renderPinDots(); renderKeypad();
+}
+function renderPinDots(){
+  const d=document.getElementById('pin-dots'); d.innerHTML='';
+  for(let i=0;i<4;i++){ const x=document.createElement('div'); x.className='d'+(i<pinBuf.length?' on':''); d.appendChild(x); }
+}
+function renderKeypad(){
+  const k=document.getElementById('keypad'); k.innerHTML='';
+  ['1','2','3','4','5','6','7','8','9','C','0','OK'].forEach(t=>{
+    const b=document.createElement('button'); b.className='key'; b.textContent=t;
+    b.onclick=()=>pinTecla(t); k.appendChild(b);
+  });
+}
+function pinTecla(t){
+  if(t==='C'){ pinBuf=''; }
+  else if(t==='OK'){ validarPin(); return; }
+  else if(pinBuf.length<4){ pinBuf+=t; }
+  document.getElementById('pin-err').textContent='';
+  renderPinDots();
+  if(pinBuf.length===4) validarPin();
+}
+function validarPin(){
+  if(pinBuf===pinUser.pin){
+    USUARIO={ id:pinUser.id, nombre:pinUser.nombre, rol:pinUser.rol };
+    mostrarUsuarioEnCabecera();
+    if(USUARIO.rol==='supervisor'){
+      abrirMetricas();          // el supervisor cae directo en métricas
+    }else{
+      document.getElementById('crumb').textContent='Importar planillas del día';
+      mostrarVista('import');   // el operador va a despachar
+    }
+  }else{
+    pinBuf=''; renderPinDots();
+    document.getElementById('pin-err').textContent='PIN incorrecto. Probá de nuevo.';
+  }
+}
+function mostrarUsuarioEnCabecera(){ setHeader(''); }
+function userChipHtml(){
+  if(!USUARIO) return '';
+  return `<div class="userchip"><div class="av">${iniciales(USUARIO.nombre)}</div>`+
+    `<div><strong>${USUARIO.nombre}</strong></div>`+
+    `<button id="logout">Salir</button></div>`;
+}
+// Pone contexto (izq) + chip de usuario (der) en la cabecera, sin perder al operador.
+function setHeader(contextoHtml){
+  document.getElementById('hdr-right').innerHTML =
+    (contextoHtml||'') + userChipHtml();
+  const lo=document.getElementById('logout'); if(lo) lo.onclick=cerrarSesion;
+}
+function cerrarSesion(){
+  USUARIO=null;
+  document.getElementById('hdr-right').innerHTML='';
+  document.getElementById('crumb').textContent='Iniciar sesión';
+  renderLogin();
+  mostrarVista('login');
+}
+
+// Mapeo de columnas del Excel. Si tu archivo usa otros nombres, agregá
+// el alias acá nomás.
+const COLUMNAS = {
+  planilla:      ['planilla','nro planilla','numero planilla','planilla nro','hoja de ruta'],
+  fecha:         ['fecha'],
+  transportista: ['transportista','chofer','movil','móvil'],
+  zona:          ['zona'],
+  guia:          ['guia','guía','numero guia','nro guia','tracking'],
+  // OJO: 'bultos reales' va PRIMERO para que tome la columna F de Presis.
+  // Si querés controlar contra la columna E ("BULTOS"), poné 'bultos' primero.
+  bultos:        ['bultos reales','bulto real','bultos real','bultos','cantidad bultos','cant bultos','cantidad de bultos'],
+  zona_guia:     ['zona_guia','zona guia','localidad'],
+};
+
+const norm = s => String(s==null?'':s).trim().toLowerCase().replace(/\s+/g,' ');
+function indiceDe(headers, alias){
+  const h = headers.map(norm);
+  for(const a of alias){ const i=h.indexOf(norm(a)); if(i>=0) return i; }
+  return -1;
+}
+
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+const errBox = document.getElementById('errors');
+
+drop.onclick = ()=> fileInput.click();
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop', e=>{ if(e.dataTransfer.files.length) leerArchivos(e.dataTransfer.files); });
+fileInput.addEventListener('change', e=>{ if(e.target.files.length) leerArchivos(e.target.files); });
+
+// Saca planilla, fecha y transportista del nombre del archivo, ej:
+// "03_07_2026_planilla_57259_trasportista_molina_jose.xls"
+// Es frágil (depende de que Presis siga exportando igual); si el nombre
+// cambia, mejor migrar esto a columnas del Excel.
+function metaDeNombre(fn){
+  const base = String(fn).replace(/\.[^.]+$/,'');
+  const tk = base.split('_');
+  const low = tk.map(t=>t.toLowerCase());
+  const titulo = s => s.replace(/\b\w/g, c=>c.toUpperCase()).trim();
+
+  // fecha: dd_mm_aaaa al inicio, o ISO (aaaa-mm-dd) en cualquier lado
+  let fecha='';
+  if(/^\d{2}$/.test(tk[0]) && /^\d{2}$/.test(tk[1]) && /^\d{4}$/.test(tk[2])){
+    fecha = `${tk[0]}/${tk[1]}/${tk[2]}`;
+  } else {
+    const m = base.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if(m) fecha = `${m[3]}/${m[2]}/${m[1]}`;
+  }
+
+  // planilla: token que sigue a "planilla"
+  let planilla='';
+  const ip = low.indexOf('planilla');
+  if(ip>=0 && tk[ip+1]) planilla = tk[ip+1];
+
+  // transportista: todo lo que sigue a "transportista" / "trasportista"
+  let transportista='';
+  const it = low.findIndex(t=>t==='transportista'||t==='trasportista');
+  if(it>=0) transportista = titulo(tk.slice(it+1).join(' '));
+
+  // Fallback formato viejo: número pegado a la fecha ISO al final
+  if(!planilla){
+    const ult = tk[tk.length-1] || base;
+    const mIso = base.match(/(\d{4}-\d{2}-\d{2})$/);
+    planilla = mIso ? ult.slice(0,-10) : ult;
+  }
+  return { planilla: planilla||base, fecha, transportista };
+}
+
+function leerArchivos(fileList){
+  errBox.classList.add('hidden'); errBox.innerHTML='';
+  const archivos = [...fileList];
+  const lecturas = archivos.map(file => new Promise(resolve=>{
+    const reader = new FileReader();
+    reader.onload = ev =>{
+      try{
+        const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+        const sheet = wb.SheetNames.includes('Planillas') ? 'Planillas' : wb.SheetNames[0];
+        const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sheet], {header:1, raw:false, defval:''});
+        resolve(procesarArchivo(aoa, file.name));
+      }catch(err){
+        resolve({ planillas:[], errores:[`${file.name}: no se pudo leer (¿es un .xls/.xlsx válido?).`] });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }));
+
+  Promise.all(lecturas).then(resultados=>{
+    const planillas = [];
+    const errores = [];
+    resultados.forEach(r=>{ planillas.push(...r.planillas); errores.push(...r.errores); });
+    if(!planillas.length){ mostrarErrores(errores.length?errores:['No se encontraron planillas válidas.']); return; }
+    if(errores.length) mostrarErrores(errores.concat([`Importadas ${planillas.length} planilla(s) con las filas válidas.`]));
+    abrirLista(planillas);
+  });
+}
+
+// Soporta dos formatos: "agrupado" (el Excel ya trae columna 'planilla',
+// puede mezclar varias) o "Presis" (un archivo = una planilla, metadatos
+// salen del nombre del archivo, ver metaDeNombre).
+function procesarArchivo(aoa, filename){
+  if(!aoa.length) return { planillas:[], errores:[`${filename}: archivo vacío.`] };
+  const headers = aoa[0];
+  const idx = {};
+  for(const campo of Object.keys(COLUMNAS)) idx[campo] = indiceDe(headers, COLUMNAS[campo]);
+
+  // Formato A: el Excel ya trae columna 'planilla' (varias planillas agrupadas)
+  if(idx.planilla >= 0) return parseAgrupado(aoa, idx, filename);
+
+  // Formato B (Presis): un archivo = una planilla; metadatos del nombre de archivo
+  if(idx.guia >= 0 && idx.bultos >= 0) return parsePresis(aoa, idx, filename);
+
+  return { planillas:[], errores:[`${filename}: no encuentro las columnas (guía / bultos).`] };
+}
+
+function parseAgrupado(aoa, idx, filename){
+  const errores=[]; const mapa=new Map();
+  for(let r=1;r<aoa.length;r++){
+    const f=aoa[r]; if(!f||f.every(c=>String(c).trim()==='')) continue;
+    const nroPl=String(f[idx.planilla]).trim();
+    const guia=String(f[idx.guia]).trim();
+    const bultos=parseInt(String(f[idx.bultos]).trim(),10);
+    if(!nroPl){errores.push(`${filename} fila ${r+1}: sin planilla.`);continue;}
+    if(!guia){errores.push(`${filename} fila ${r+1}: sin guía.`);continue;}
+    if(!Number.isInteger(bultos)||bultos<1){errores.push(`${filename} fila ${r+1} (guía ${guia}): bultos inválido.`);continue;}
+    if(!mapa.has(nroPl)) mapa.set(nroPl,{ hojaId:nroPl,
+      transportista: idx.transportista>=0?String(f[idx.transportista]).trim():'',
+      zona: idx.zona>=0?String(f[idx.zona]).trim():'',
+      fecha: idx.fecha>=0?String(f[idx.fecha]).trim():'', guias:[], estado:'pendiente' });
+    mapa.get(nroPl).guias.push({ numero:guia, esperados:bultos,
+      zona: idx.zona_guia>=0&&f[idx.zona_guia]?String(f[idx.zona_guia]).trim():(idx.zona>=0?String(f[idx.zona]).trim():'') });
+  }
+  return { planillas:[...mapa.values()], errores };
+}
+
+function parsePresis(aoa, idx, filename){
+  const errores=[]; const meta=metaDeNombre(filename);
+  const guias=[];
+  for(let r=1;r<aoa.length;r++){
+    const f=aoa[r]; if(!f||f.every(c=>String(c).trim()==='')) continue;
+    const guia=String(f[idx.guia]).trim();
+    if(!/^\d/.test(guia)) continue; // saltea filas que no son guía (totales, etc.)
+    let bultos=parseInt(String(f[idx.bultos]).trim(),10);
+    if(!Number.isInteger(bultos)||bultos<1){
+      bultos=1; // BULTOS REALES vacío -> se asume 1 para no perder la guía
+      errores.push(`${filename}: guía ${guia} sin BULTOS REALES, se tomó 1.`);
+    }
+    guias.push({ numero:guia, esperados:bultos,
+      zona: idx.zona_guia>=0&&f[idx.zona_guia]?String(f[idx.zona_guia]).trim():'' });
+  }
+  if(!guias.length) return { planillas:[], errores:errores.concat([`${filename}: sin guías válidas.`]) };
+  return { planillas:[{
+    hojaId: meta.planilla, transportista: meta.transportista||'', zona:'', fecha: meta.fecha, guias, estado:'pendiente'
+  }], errores };
+}
+
+function mostrarErrores(lista){
+  errBox.classList.remove('hidden');
+  errBox.innerHTML = '<h3>Revisá el archivo</h3>' + lista.map(e=>`<div>• ${e}</div>`).join('');
+}
+
+let PLANILLAS = [];
+
+function abrirLista(planillas){
+  if(planillas) PLANILLAS = planillas;
+  const totalGuias = PLANILLAS.reduce((s,p)=>s+p.guias.length,0);
+  const totalBultos = PLANILLAS.reduce((s,p)=>s+p.guias.reduce((a,g)=>a+g.esperados,0),0);
+  document.getElementById('list-sub').textContent =
+    `${PLANILLAS.length} planillas · ${totalGuias} guías · ${totalBultos} bultos`;
+
+  const grid = document.getElementById('grid'); grid.innerHTML='';
+  PLANILLAS.forEach((p,i)=>{
+    const nb = p.guias.reduce((a,g)=>a+g.esperados,0);
+    const card = document.createElement('div'); card.className='pl-card';
+    const done = p.estado==='despachada';
+    const transTxt = p.transportista ? p.transportista : '+ Asignar transportista';
+    const transCls = p.transportista ? 'trans' : 'trans';
+    const transStyle = p.transportista ? '' : 'color:var(--brand);cursor:pointer;font-size:14px';
+    card.innerHTML = `
+      <span class="badge ${done?'done':'pend'}">${done?'Despachada ✓':'Pendiente'}</span>
+      <div class="${transCls}" data-i="${i}" style="${transStyle}">${transTxt}</div>
+      <div class="id">Planilla ${p.hojaId}</div>
+      <div class="zf">${p.zona||'—'} · ${p.fecha||'—'}</div>
+      <div class="stats">
+        <div><span class="n">${p.guias.length}</span><span class="l">Guías</span></div>
+        <div><span class="n">${nb}</span><span class="l">Bultos</span></div>
+      </div>`;
+    // Click en el transportista -> asignar / editar
+    const transEl = card.querySelector('.trans');
+    transEl.style.cursor = 'pointer';
+    transEl.title = 'Clic para asignar el transportista';
+    transEl.onclick = ()=>{
+      const val = prompt('Transportista de la planilla '+p.hojaId+':', p.transportista||'');
+      if(val!==null){ p.transportista = val.trim(); abrirLista(); }
+    };
+    const btn = document.createElement('button');
+    btn.className = 'ctrl-btn'+(done?' done':'');
+    btn.textContent = done ? 'Despachada' : 'Controlar';
+    if(!done) btn.onclick = ()=> iniciarControl(p);
+    card.appendChild(btn);
+    grid.appendChild(card);
+  });
+
+  mostrarVista('list');
+  document.getElementById('crumb').textContent='Seleccioná una planilla';
+  setHeader(`<div class="meta"><span>Importadas</span><strong>${PLANILLAS.length} planillas</strong></div>`);
+  // El acceso a métricas es solo para supervisores
+  document.getElementById('ver-metricas').style.display =
+    (USUARIO && USUARIO.rol==='supervisor') ? '' : 'none';
+}
+
+document.getElementById('reimport').onclick = ()=>{
+  fileInput.value='';
+  document.getElementById('crumb').textContent='Importar planillas del día';
+  setHeader('');
+  mostrarVista('import');
+};
+document.getElementById('ver-metricas').onclick = ()=> abrirMetricas();
+document.getElementById('met-volver').onclick = ()=> abrirLista();
+document.getElementById('met-export').onclick = ()=> exportarMetricas();
+document.getElementById('met-despachar').onclick = ()=>{
+  document.getElementById('crumb').textContent='Importar planillas del día';
+  setHeader('');
+  mostrarVista('import');
+};
+
+function mostrarVista(v){
+  document.getElementById('view-login').classList.toggle('hidden', v!=='login');
+  document.getElementById('view-import').classList.toggle('hidden', v!=='import');
+  document.getElementById('view-list').classList.toggle('hidden', v!=='list');
+  document.getElementById('view-control').classList.toggle('hidden', v!=='control');
+  document.getElementById('view-metricas').classList.toggle('hidden', v!=='metricas');
+}
+
+let hojaRuta=null, counts={}, incidents=[], despachado=false;
+let totalGuias=0, totalBultos=0, byNum={}, planillaActual=null, inicioControl=null;
+
+// Arranca el control de una planilla: resetea contadores, marca el inicio
+// del cronómetro y arma los chips de simulación (para probar sin lector).
+function iniciarControl(p){
+  planillaActual=p; hojaRuta=p;
+  counts={}; incidents=[]; despachado=false;
+  inicioControl=Date.now();              // arranca el cronómetro del despacho
+  hojaRuta.guias.forEach(g=>counts[g.numero]=0);
+  totalGuias=hojaRuta.guias.length;
+  totalBultos=hojaRuta.guias.reduce((s,g)=>s+g.esperados,0);
+  byNum=Object.fromEntries(hojaRuta.guias.map(g=>[g.numero,g]));
+
+  document.getElementById('crumb').textContent='Control de carga';
+  setHeader(
+    `<div class="meta"><span>Transportista</span><strong>${hojaRuta.transportista||'Sin asignar'}</strong></div>`+
+    `<div class="meta"><span>Planilla</span><strong>${hojaRuta.hojaId}</strong></div>`+
+    `<div class="meta"><span>Zona</span><strong>${hojaRuta.zona||'—'}</strong></div>`+
+    `<div class="meta"><span>Fecha</span><strong>${hojaRuta.fecha||'—'}</strong></div>`
+  );
+
+  const fb=document.getElementById('fb'); fb.className='feedback';
+  document.getElementById('fb-icon').innerHTML='&#9678;';
+  document.getElementById('fb-msg').textContent='Listo para escanear';
+  document.getElementById('fb-sub').textContent=`${totalGuias} guías · ${totalBultos} bultos esperados`;
+
+  const chips=document.getElementById('chips'); chips.innerHTML='';
+  hojaRuta.guias.forEach(g=>{
+    const c=document.createElement('button'); c.className='chip'; c.textContent=g.numero;
+    c.onclick=()=>scan(g.numero); chips.appendChild(c);
+  });
+  const bad=document.createElement('button'); bad.className='chip bad'; bad.textContent='999000111 (no asignada)';
+  bad.onclick=()=>scan('999000111'); chips.appendChild(bad);
+
+  document.getElementById('confirm').textContent='CONFIRMAR DESPACHO';
+  mostrarVista('control'); render(); refocus();
+}
+
+// Registra un bulto escaneado (cada lectura = un bulto físico). Tres casos:
+// código no está en la planilla, la guía ya está completa, o suma 1 al
+// contador (verde si completa la guía, naranja si todavía faltan bultos).
+function scan(raw){
+  if(despachado) return;
+  const code=(raw||'').trim(); if(!code) return;
+  const g=byNum[code];
+  if(!g){
+    addIncident('guia_no_asignada',code);
+    feedback('err','&#10005;','Guía no asignada a este transportista',`El código ${code} no está en la planilla ${hojaRuta.hojaId}.`);
+    // Bloqueante: el operador tiene que separar el paquete y confirmar para poder seguir escaneando.
+    mostrarModalBloqueo('err','&#10005;','Guía no asignada a este recorrido',
+      `El código <span class="m-code">${code}</span> no pertenece a la planilla ${hojaRuta.hojaId}.<br>Separá este paquete del resto: no tiene que despacharse con esta hoja de ruta.`,
+      'Ya lo separé, continuar');
+  }else if(counts[code]>=g.esperados){
+    addIncident('bulto_sobrante',code);
+    feedback('warn','!','Guía ya completa',`La guía ${code} ya tiene sus ${g.esperados} bulto(s) escaneado(s).`);
+  }else{
+    counts[code]++; const n=counts[code];
+    if(n===g.esperados){
+      // guía completa (incluye las de 1 bulto) -> verde
+      feedback('ok','&#10003;',`Guía completa · ${n}/${g.esperados} bultos`,`Guía ${code} · ${g.zona}`);
+    }else{
+      // guía de 2+ bultos todavía incompleta -> NARANJA con aviso
+      const restan=g.esperados-n;
+      const msg = n===1 ? `Atento: son ${g.esperados} bultos` : `Bulto ${n} de ${g.esperados}`;
+      const sub = `Guía ${code} · falta${restan>1?'n':''} ${restan} bulto(s) por escanear`;
+      feedback('warn','&#9888;', msg, sub);
+      // Cartel grande automático: se ve sí o sí, incluso escaneando rápido con el lector.
+      mostrarModalAviso('warn','&#9888;',msg,sub);
+    }
+  }
+  render();
+}
+
+// ---- Modal grande de aviso: modo automático (se cierra solo) y modo
+// bloqueante (guía no asignada) que exige apretar el botón para seguir. ----
+let modalTimer=null, modalBloqueante=false;
+function abrirModal(type,icon,msg,sub){
+  const m=document.getElementById('modal-aviso');
+  m.className=type; void m.offsetWidth; // reset animación
+  document.getElementById('m-icon').innerHTML=icon;
+  document.getElementById('m-msg').textContent=msg;
+  document.getElementById('m-sub').innerHTML=sub;
+  m.classList.add('show');
+}
+function mostrarModalAviso(type,icon,msg,sub){
+  modalBloqueante=false;
+  abrirModal(type,icon,msg,sub);
+  document.getElementById('m-btn').classList.add('hidden');
+  const barWrap=document.getElementById('m-bar-wrap'); barWrap.classList.remove('hidden');
+  const bar=document.getElementById('m-bar');
+  bar.style.animation='none'; void bar.offsetWidth;
+  bar.style.animation='mbar 1.8s linear forwards';
+  clearTimeout(modalTimer);
+  modalTimer=setTimeout(cerrarModalAviso,1800);
+}
+function mostrarModalBloqueo(type,icon,msg,sub,textoBoton){
+  modalBloqueante=true;
+  abrirModal(type,icon,msg,sub);
+  clearTimeout(modalTimer);
+  document.getElementById('m-bar-wrap').classList.add('hidden');
+  const btn=document.getElementById('m-btn');
+  btn.textContent=textoBoton||'Continuar';
+  btn.classList.remove('hidden');
+}
+function cerrarModalAviso(){
+  document.getElementById('modal-aviso').classList.remove('show');
+  clearTimeout(modalTimer);
+  modalBloqueante=false;
+  refocus();
+}
+document.getElementById('m-btn').addEventListener('click',e=>{ e.stopPropagation(); cerrarModalAviso(); });
+document.getElementById('modal-aviso').addEventListener('click',()=>{ if(!modalBloqueante) cerrarModalAviso(); });
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape' && !modalBloqueante) cerrarModalAviso();
+});
+function feedback(type,icon,msg,sub){
+  const fb=document.getElementById('fb'); fb.className='feedback '+type;
+  void fb.offsetWidth; fb.classList.add('flash');
+  document.getElementById('fb-icon').innerHTML=icon;
+  document.getElementById('fb-msg').textContent=msg;
+  document.getElementById('fb-sub').textContent=sub;
+}
+function addIncident(tipo,code){
+  const labels={guia_no_asignada:'No asignada',bulto_sobrante:'Bulto sobrante'};
+  incidents.unshift({tipo:labels[tipo],code,hora:new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})});
+}
+
+// Quita una guía faltante de la planilla (pedido perdido, etc.). Pide
+// confirmación + motivo obligatorio en un modal (no un confirm() del
+// navegador) para que quede registrado en el historial del control.
+let quitarPendiente=null;
+function quitarGuia(numero){
+  if(despachado) return;
+  const g=byNum[numero]; if(!g) return;
+  quitarPendiente=numero;
+  document.getElementById('mq-code').textContent=numero;
+  document.getElementById('mq-motivo').value='';
+  document.getElementById('mq-err').classList.add('hidden');
+  document.getElementById('modal-quitar').classList.add('show');
+  setTimeout(()=>document.getElementById('mq-motivo').focus(),50);
+}
+function cerrarModalQuitar(){
+  document.getElementById('modal-quitar').classList.remove('show');
+  quitarPendiente=null;
+  refocus();
+}
+document.getElementById('mq-cancel').addEventListener('click',cerrarModalQuitar);
+document.getElementById('modal-quitar').addEventListener('click',e=>{ if(e.target.id==='modal-quitar') cerrarModalQuitar(); });
+document.getElementById('mq-ok').addEventListener('click',()=>{
+  const motivo=document.getElementById('mq-motivo').value.trim();
+  if(!motivo){ document.getElementById('mq-err').classList.remove('hidden'); return; }
+  const numero=quitarPendiente; if(!numero) return;
+  hojaRuta.guias = hojaRuta.guias.filter(x=>x.numero!==numero);
+  delete counts[numero]; delete byNum[numero];
+  totalGuias = hojaRuta.guias.length;
+  totalBultos = hojaRuta.guias.reduce((s,x)=>s+x.esperados,0);
+  incidents.unshift({tipo:'Eliminó una guía del recorrido', code:numero, motivo,
+    hora:new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})});
+  feedback('warn','&#8722;',`Guía ${numero} eliminada del recorrido`,`Motivo: ${motivo}`);
+  document.getElementById('modal-quitar').classList.remove('show');
+  quitarPendiente=null;
+  render();
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape' && document.getElementById('modal-quitar').classList.contains('show')) cerrarModalQuitar();
+});
+// Redibuja toda la vista de control a partir de counts/hojaRuta/incidents
+// y decide si el botón CONFIRMAR se habilita (cuando faltan===0).
+function render(){
+  const bultosCtrl=Object.values(counts).reduce((a,b)=>a+b,0);
+  const guiasComp=hojaRuta.guias.filter(g=>counts[g.numero]>=g.esperados).length;
+  const faltan=totalBultos-bultosCtrl;
+  document.getElementById('c-guias').innerHTML=`${guiasComp}<small>/${totalGuias}</small>`;
+  document.getElementById('c-bultos').innerHTML=`${bultosCtrl}<small>/${totalBultos}</small>`;
+  document.getElementById('c-faltan').textContent=faltan;
+  document.getElementById('c-faltan-box').classList.toggle('done',faltan===0);
+
+  const list=document.getElementById('guides'); list.innerHTML='';
+  hojaRuta.guias.forEach(g=>{
+    const n=counts[g.numero]; const row=document.createElement('div');
+    row.className='guide'+(n>0?' hl':'');
+    let pc='pill'; if(n>0&&n<g.esperados)pc='pill part'; if(n>=g.esperados)pc='pill full';
+    row.innerHTML=`<div class="code">${g.numero}</div><div class="zone">${g.zona||''}</div>`+
+      `<div class="${pc}">${n}/${g.esperados}${n>=g.esperados?' ✓':''}</div>`;
+    const rm=document.createElement('button');
+    rm.className='rm'; rm.innerHTML='&#10005;'; rm.title='Quitar guía (faltante)';
+    rm.onclick=(e)=>{ e.stopPropagation(); quitarGuia(g.numero); };
+    row.appendChild(rm);
+    list.appendChild(row);
+  });
+
+  const ic=document.getElementById('incidents');
+  document.getElementById('inc-count').textContent=incidents.length?`(${incidents.length})`:'';
+  if(!incidents.length){ic.innerHTML='<div class="empty">Sin incidencias por ahora.</div>';}
+  else{ic.innerHTML='';incidents.forEach(i=>{
+    const d=document.createElement('div'); d.className='inc'; d.style.flexWrap='wrap';
+    const motivoHtml=i.motivo?`<div style="width:100%;color:var(--muted);margin-top:2px">Motivo: ${i.motivo}</div>`:'';
+    d.innerHTML=`<span class="t">${i.tipo}</span><span style="font-family:'JetBrains Mono'">${i.code}</span><span style="margin-left:auto;color:var(--muted-2)">${i.hora}</span>${motivoHtml}`;
+    ic.appendChild(d);});}
+
+  const btn=document.getElementById('confirm'), gate=document.getElementById('gate');
+  if(faltan===0){btn.classList.add('ready');btn.disabled=false;gate.innerHTML='Todos los bultos controlados. Listo para confirmar.';}
+  else{btn.classList.remove('ready');btn.disabled=true;gate.innerHTML=`No se puede cerrar: faltan <b>${faltan}</b> bulto(s).`;}
+}
+
+// Confirma el despacho (solo si faltan===0), calcula la duración desde
+// inicioControl y guarda el registro en DESPACHOS.
+document.getElementById('confirm').onclick=()=>{
+  const btn=document.getElementById('confirm'); if(btn.disabled) return;
+  despachado=true;
+  const bultosCtrl=Object.values(counts).reduce((a,b)=>a+b,0);
+  if(planillaActual) planillaActual.estado='despachada';
+
+  // ---- Registro para métricas: quién, cuánto tardó, cuándo ----
+  const fin=Date.now();
+  const duracionSeg=Math.max(1, Math.round((fin-(inicioControl||fin))/1000));
+  const noAsignados=incidents.filter(i=>i.tipo==='No asignada').length;
+  const eliminadas=incidents.filter(i=>i.tipo==='Eliminó una guía del recorrido').length;
+  const bultoSobrante=incidents.filter(i=>i.tipo==='Bulto sobrante').length;
+  DESPACHOS.push({
+    usuarioId: USUARIO?USUARIO.id:null,
+    usuario: USUARIO?USUARIO.nombre:'—',
+    planilla: hojaRuta.hojaId,
+    transportista: hojaRuta.transportista||'Sin asignar',
+    guias: totalGuias,
+    bultos: bultosCtrl,
+    inicio: new Date(inicioControl).toISOString(),
+    fin: new Date(fin).toISOString(),
+    duracionSeg,
+    fecha: new Date(fin).toLocaleDateString('es-AR'),
+    noAsignados, eliminadas, bultoSobrante,
+    incidencias: incidents.slice(), // historial completo (tipo, código, motivo, hora)
+  });
+
+  feedback('ok','&#10003;','Despacho confirmado',
+    `${hojaRuta.hojaId} · ${totalGuias} guías · ${bultosCtrl} bultos · ${USUARIO?USUARIO.nombre:''} · ${fmtDur(duracionSeg)} · ${new Date().toLocaleString('es-AR')}`);
+  btn.classList.remove('ready'); btn.disabled=true; btn.textContent='DESPACHO CONFIRMADO ✓';
+  document.getElementById('gate').innerHTML='Auditoría registrada. <button class="link" id="goback">Volver a la lista</button>';
+  document.getElementById('goback').onclick=()=>abrirLista();
+};
+
+document.getElementById('volver').onclick=()=>abrirLista();
+
+const input=document.getElementById('scan');
+input.addEventListener('keydown',e=>{ if(e.key==='Enter'){scan(input.value);input.value='';}});
+function refocus(){
+  if(despachado) return;
+  if(document.getElementById('view-control').classList.contains('hidden')) return;
+  if(document.getElementById('modal-quitar').classList.contains('show')) return; // hay un textarea abierto
+  input.focus();
+}
+input.addEventListener('blur',()=>setTimeout(refocus,80));
+document.addEventListener('click',e=>{ if(!e.target.closest('button') && document.getElementById('view-control') && !document.getElementById('view-control').classList.contains('hidden')) refocus(); });
+
+function fmtDur(seg){
+  const m=Math.floor(seg/60), s=seg%60;
+  return m>0 ? `${m}m ${s}s` : `${s}s`;
+}
+// Agrupa DESPACHOS por operador filtrado a la semana actual y arma la
+// tabla de métricas, incluyendo incidencias (paquetes no asignados
+// escaneados y guías eliminadas del recorrido, con su motivo).
+function abrirMetricas(){
+  setHeader('');
+  document.getElementById('crumb').textContent='Métricas';
+  document.getElementById('met-volver').classList.toggle('hidden', !(PLANILLAS && PLANILLAS.length));
+
+  // Solo la SEMANA ACTUAL (arranca en cero cada lunes, sin borrar historial)
+  const semana = DESPACHOS.filter(d=>enSemanaActual(d.fecha));
+
+  const agg=new Map();
+  semana.forEach(d=>{
+    if(!agg.has(d.usuario)) agg.set(d.usuario,{usuario:d.usuario,items:[],bultos:0,tiempo:0,noAsig:0,elim:0,sobra:0});
+    const a=agg.get(d.usuario); a.items.push(d); a.bultos+=d.bultos; a.tiempo+=d.duracionSeg;
+    a.noAsig += d.noAsignados||0; a.elim += d.eliminadas||0; a.sobra += d.bultoSobrante||0;
+  });
+  const ops=[...agg.values()].sort((x,y)=>y.bultos-x.bultos);
+  const ini=inicioSemana(new Date());
+  document.getElementById('met-sub').textContent =
+    `Semana desde el ${ini.toLocaleDateString('es-AR')} · ${semana.length} despachos`;
+
+  const body=document.getElementById('met-body');
+  if(!ops.length){
+    body.innerHTML='<div class="empty" style="padding:24px">No hay despachos esta semana todavía.</div>';
+  }else{
+    body.innerHTML = ops.map(a=>{
+      const prom=Math.round(a.tiempo/a.items.length);
+      const items=[...a.items].sort((x,y)=>parseFechaAR(x.fecha)-parseFechaAR(y.fecha));
+      const rows=items.map(d=>
+        `<tr><td class="op-name">${d.planilla}</td><td>${d.fecha}</td>`+
+        `<td>${d.transportista||'—'}</td><td class="num">${d.guias}</td>`+
+        `<td class="num">${d.bultos}</td><td class="num">${fmtDur(d.duracionSeg)}</td>`+
+        `<td class="num">${d.noAsignados||0}</td><td class="num">${d.bultoSobrante||0}</td><td class="num">${d.eliminadas||0}</td></tr>`
+      ).join('');
+      // Detalle de incidencias (con motivo) de todas las planillas del operador esta semana
+      const todasInc = items.flatMap(d=>(d.incidencias||[]).map(i=>({...i,planilla:d.planilla})));
+      const incHtml = !todasInc.length ? '' : `
+        <div style="margin-top:10px;padding:12px 14px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px">
+          <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Incidencias del período</div>
+          ${todasInc.map(i=>`<div class="inc" style="border-color:var(--line);flex-wrap:wrap">
+            <span class="t" style="color:${i.tipo==='Eliminó una guía del recorrido'?'var(--warn)':'var(--err)'}">${i.tipo}</span>
+            <span style="font-family:'JetBrains Mono'">${i.code}</span>
+            <span style="color:var(--muted-2)">planilla ${i.planilla}</span>
+            <span style="margin-left:auto;color:var(--muted-2)">${i.hora}</span>
+            ${i.motivo?`<div style="width:100%;color:var(--muted);margin-top:2px">Motivo: ${i.motivo}</div>`:''}
+          </div>`).join('')}
+        </div>`;
+      return `<div class="op-block">
+        <div class="op-head"><strong>${a.usuario}</strong>
+          <span class="sum">${a.items.length} planillas · ${a.bultos} bultos · ${fmtDur(a.tiempo)} total · prom ${fmtDur(prom)}${(a.noAsig||a.elim||a.sobra)?` · ${a.noAsig} no asig. · ${a.sobra} sobrantes · ${a.elim} eliminadas`:''}</span>
+        </div>
+        <table class="mtable"><thead><tr>
+          <th>Planilla</th><th>Fecha</th><th>Transportista</th>
+          <th style="text-align:right">Guías</th><th style="text-align:right">Bultos</th><th style="text-align:right">Tiempo</th>
+          <th style="text-align:right">No asig.</th><th style="text-align:right">Sobrantes</th><th style="text-align:right">Eliminadas</th>
+        </tr></thead><tbody>${rows}</tbody></table>
+        ${incHtml}
+      </div>`;
+    }).join('');
+  }
+  mostrarVista('metricas');
+}
+
+// ---- Semana actual (lunes 00:00 en adelante) ----
+function inicioSemana(d){
+  const x=new Date(d); const dia=(x.getDay()+6)%7; // 0 = lunes
+  x.setHours(0,0,0,0); x.setDate(x.getDate()-dia); return x;
+}
+function parseFechaAR(s){ const [dd,mm,yy]=String(s).split('/').map(Number); return new Date(yy,mm-1,dd); }
+function enSemanaActual(fechaStr){ return parseFechaAR(fechaStr) >= inicioSemana(new Date()); }
+
+// Arma un .xlsx (Resumen + Detalle) de la semana actual con xlsx.full.min.js.
+function exportarMetricas(){
+  const data = DESPACHOS.filter(d=>enSemanaActual(d.fecha));
+  if(!data.length){ alert('No hay despachos en la semana para exportar.'); return; }
+  // Hoja Detalle (una fila por despacho, con el resumen de qué pasó en esa planilla)
+  const detalle = data.map(d=>{
+    const inc=d.incidencias||[];
+    const resumenInc = inc.map(i=> i.motivo ? `${i.tipo} ${i.code} (motivo: ${i.motivo})` : `${i.tipo} ${i.code}`).join(' | ');
+    return {
+      Operador:d.usuario, Planilla:d.planilla, Fecha:d.fecha, Transportista:d.transportista||'',
+      Guias:d.guias, Bultos:d.bultos, Tiempo:fmtDur(d.duracionSeg),
+      'No asignados':d.noAsignados||0, 'Bultos sobrantes':d.bultoSobrante||0, 'Guías eliminadas':d.eliminadas||0,
+      'Detalle de incidencias':resumenInc
+    };
+  });
+  // Hoja Resumen (por operador)
+  const agg=new Map();
+  data.forEach(d=>{ if(!agg.has(d.usuario)) agg.set(d.usuario,{Operador:d.usuario,Planillas:0,Bultos:0,_t:0,NoAsig:0,Sobra:0,Elim:0});
+    const a=agg.get(d.usuario); a.Planillas++; a.Bultos+=d.bultos; a._t+=d.duracionSeg;
+    a.NoAsig+=d.noAsignados||0; a.Sobra+=d.bultoSobrante||0; a.Elim+=d.eliminadas||0; });
+  const resumen=[...agg.values()].map(a=>({
+    Operador:a.Operador, Planillas:a.Planillas, Bultos:a.Bultos,
+    'Tiempo total':fmtDur(a._t), 'Prom/planilla':fmtDur(Math.round(a._t/a.Planillas)),
+    'No asignados':a.NoAsig, 'Bultos sobrantes':a.Sobra, 'Guías eliminadas':a.Elim
+  }));
+  // Hoja Incidencias (historial completo: quién, qué planilla, tipo, código, motivo, hora)
+  const incidencias = data.flatMap(d=>(d.incidencias||[]).map(i=>({
+    Operador:d.usuario, Planilla:d.planilla, Fecha:d.fecha,
+    Tipo:i.tipo, Codigo:i.code, Motivo:i.motivo||'', Hora:i.hora
+  })));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), 'Resumen');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Detalle');
+  if(incidencias.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incidencias), 'Incidencias');
+  const hoy=new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `metricas_semana_${hoy}.xlsx`);
+}
+
+renderLogin();
+mostrarVista('login');
+document.getElementById('pin-back').onclick=()=>{ pinBuf=''; renderLogin(); };
+</script>
+</body>
+</html>

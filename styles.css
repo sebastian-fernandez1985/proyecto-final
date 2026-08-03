@@ -1,8 +1,12 @@
 :root{
-    --bg:#0b1118; --panel:#141d28; --panel-2:#0f1722; --line:#243140;
-    --txt:#eef2f6; --muted:#8a99a8; --muted-2:#5d6e7d;
-    --brand:#22d3ee; --ok:#1db954; --ok-bg:#0e3b22;
-    --warn:#f5a623; --warn-bg:#3b2c0a; --err:#ef4444; --err-bg:#3b1414;
+    /* Paleta de marca FIXY (Manual de marca): Sky Blue #008FC3, Sun Yellow #FBBE37,
+       Graphite Grey #9EA3A5, Paperwork Grey #F3F3F2. El resto de los tonos (fondos
+       oscuros, bordes) se derivan de estos para mantener el ambiente de pantalla
+       de depósito, pero con el color de marca como acento principal. */
+    --bg:#0a1620; --panel:#101f2c; --panel-2:#0b1620; --line:#1e3040;
+    --txt:#F3F3F2; --muted:#9EA3A5; --muted-2:#6b7679;
+    --brand:#008FC3; --ok:#1db954; --ok-bg:#0e3b22;
+    --warn:#FBBE37; --warn-bg:#3d2f0c; --err:#ef4444; --err-bg:#3b1414;
     --radius:14px;
   }
   *{box-sizing:border-box}
@@ -12,6 +16,7 @@
   .hidden{display:none!important}
   header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;
     padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+  .logo-img{height:30px;width:auto;display:block}
   .logo{font-family:'Space Grotesk';font-weight:700;letter-spacing:.5px;font-size:20px}
   .logo b{color:var(--brand)}
   .crumb{color:var(--muted);font-size:13px;font-weight:500}
@@ -25,6 +30,7 @@
   /* ===== VISTA IMPORTAR ===== */
   #view-import{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
   .imp{width:100%;max-width:620px;text-align:center}
+  .imp-logo{height:52px;width:auto;margin:0 auto 18px;display:block}
   .imp h1{font-family:'Space Grotesk';font-weight:600;font-size:30px;margin:0 0 6px}
   .imp p{color:var(--muted);margin:0 0 26px;font-size:15px}
   .drop{border:2px dashed var(--line);border-radius:18px;padding:46px 24px;cursor:pointer;transition:.15s;background:var(--panel)}
@@ -57,7 +63,7 @@
   .badge.pend{background:#1c2733;color:var(--muted)}
   .badge.done{background:var(--ok-bg);color:var(--ok)}
   .ctrl-btn{margin-top:auto;border:none;border-radius:11px;padding:13px;cursor:pointer;
-    font-family:'Space Grotesk';font-weight:700;font-size:15px;background:var(--brand);color:#04222a;transition:.15s}
+    font-family:'Space Grotesk';font-weight:700;font-size:15px;background:var(--brand);color:#fff;transition:.15s}
   .ctrl-btn:hover{filter:brightness(1.06)}
   .ctrl-btn.done{background:#1c2733;color:var(--muted-2);cursor:default}
 
@@ -116,12 +122,13 @@
   .link{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;text-decoration:underline;font-family:inherit}
   .confirm{border:none;border-radius:14px;padding:18px 34px;cursor:not-allowed;font-family:'Space Grotesk';
     font-weight:700;font-size:18px;letter-spacing:.4px;background:#1c2733;color:var(--muted-2);transition:.15s}
-  .confirm.ready{background:var(--brand);color:#04222a;cursor:pointer;box-shadow:0 0 0 3px rgba(34,211,238,.18)}
+  .confirm.ready{background:var(--brand);color:#fff;cursor:pointer;box-shadow:0 0 0 3px rgba(0,143,195,.28)}
   .confirm.ready:hover{filter:brightness(1.06)}
 
   /* ===== LOGIN ===== */
   #view-login{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
   .login{width:100%;max-width:560px;text-align:center}
+  .login-logo{height:64px;width:auto;margin:0 auto 22px;display:block;position:relative;z-index:1}
   .login h1{font-family:'Space Grotesk';font-weight:600;font-size:28px;margin:0 0 4px}
   .login p{color:var(--muted);margin:0 0 26px;font-size:15px}
   .ops{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
@@ -164,7 +171,7 @@
   .op-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
   .op-head strong{font-family:'Space Grotesk';font-weight:600;font-size:16px}
   .op-head .sum{color:var(--muted);font-size:13px;font-family:'JetBrains Mono'}
-  .btn-sm{background:var(--brand);color:#04222a;border:none;border-radius:10px;padding:9px 16px;cursor:pointer;
+  .btn-sm{background:var(--brand);color:#fff;border:none;border-radius:10px;padding:9px 16px;cursor:pointer;
     font-family:'Space Grotesk';font-weight:700;font-size:13px}
   .btn-sm:hover{filter:brightness(1.06)}
   @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
@@ -192,6 +199,29 @@
   #modal-aviso.err .m-bar i{background:var(--err)}
   #modal-aviso.ok .m-bar i{background:var(--ok)}
   @keyframes mbar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+  #modal-aviso .m-btn{margin-top:22px;border:none;border-radius:12px;padding:14px 20px;width:100%;cursor:pointer;
+    font-family:'Space Grotesk';font-weight:700;font-size:15px;background:var(--brand);color:#fff}
+  #modal-aviso.err .m-btn{background:var(--err);color:#fff}
+  #modal-aviso .m-btn:hover{filter:brightness(1.06)}
+
+  /* ===== MODAL ELIMINAR GUÍA — pide motivo obligatorio ===== */
+  #modal-quitar{position:fixed;inset:0;z-index:51;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,10,15,.72);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .12s}
+  #modal-quitar.show{opacity:1;pointer-events:auto}
+  #modal-quitar .box{width:100%;max-width:440px;margin:0 20px;border-radius:20px;padding:30px 28px;text-align:center;
+    background:var(--panel);border:2px solid var(--err);box-shadow:0 20px 60px rgba(0,0,0,.5);
+    transform:scale(.94);transition:transform .12s}
+  #modal-quitar.show .box{transform:scale(1)}
+  #modal-quitar .m-icon{font-size:44px;line-height:1;margin-bottom:12px}
+  #modal-quitar .m-msg{font-family:'Space Grotesk';font-weight:700;font-size:21px;margin-bottom:8px;line-height:1.25}
+  #modal-quitar .m-sub{color:var(--muted);font-size:14px;line-height:1.4;margin-bottom:16px}
+  #modal-quitar .m-code{font-family:'JetBrains Mono';color:var(--brand);font-weight:700}
+  #modal-quitar textarea{width:100%;background:var(--panel-2);border:2px solid var(--line);border-radius:12px;
+    color:var(--txt);font-family:'Inter';font-size:14px;padding:12px 14px;outline:none;resize:vertical}
+  #modal-quitar textarea:focus{border-color:var(--brand)}
+  #modal-quitar .mq-err{color:var(--err);font-size:13px;margin-top:8px;text-align:left}
+  #modal-quitar .mq-actions{display:flex;gap:12px;margin-top:18px;justify-content:center;align-items:center}
+  #modal-quitar .mq-actions .ctrl-btn{margin-top:0}
 
   /* ===== MARCA DE AGUA — fondo pantalla de control y login ===== */
   #view-control,#view-login{position:relative}
