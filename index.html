@@ -21,24 +21,26 @@
     <div class="hdr-right" id="hdr-right"></div>
   </header>
 
-  <!-- Login: elegís operador + PIN numérico (no es password, solo identifica
-       quién despacha para las métricas). Supervisor entra directo a Métricas. -->
+  <!-- Login: se identifica con el mail de la empresa (sin clave). Si es la
+       primera vez que entra, se registra solo. Los admins (definidos en
+       ADMINS más abajo / en la base en producción) caen directo en Métricas. -->
   <section id="view-login">
     <div class="login">
       <img src="assets/logo.png" alt="FIXY" class="login-logo">
-      <div id="op-select">
-        <h1>¿Quién está despachando?</h1>
-        <p>Seleccioná tu usuario para identificar el despacho.</p>
-        <div class="ops" id="ops"></div>
+      <div id="email-panel">
+        <h1>Ingresá tu mail</h1>
+        <p>Usá tu mail de FIXY para identificar el despacho.</p>
+        <input type="email" id="email-input" class="email-input" placeholder="nombre.apellido@fixy.com.ar" autocomplete="email">
+        <div class="pin-err" id="email-err"></div>
+        <button class="ctrl-btn" id="email-ok" style="width:auto;padding:12px 22px;margin-top:10px">Ingresar</button>
       </div>
-      <div id="pin-panel" class="hidden">
-        <div class="pin-who" id="pin-who"></div>
-        <p style="margin:0 0 4px">Ingresá tu PIN</p>
-        <div class="pin-dots" id="pin-dots"></div>
-        <div class="keypad" id="keypad"></div>
-        <div class="pin-err" id="pin-err"></div>
-        <button class="link" id="pin-back" style="margin-top:14px">&larr; Cambiar de usuario</button>
-        <div class="pin-hint">Demo: el PIN de cada usuario es <b>1234</b>.</div>
+      <div id="nombre-panel" class="hidden">
+        <div class="pin-who" id="nombre-who"></div>
+        <p style="margin:0 0 4px">Primera vez que entrás. ¿Cómo te llamás?</p>
+        <input type="text" id="nombre-input" class="email-input" placeholder="Nombre y apellido">
+        <div class="pin-err" id="nombre-err"></div>
+        <button class="ctrl-btn" id="nombre-ok" style="width:auto;padding:12px 22px;margin-top:10px">Confirmar</button>
+        <button class="link" id="nombre-back" style="margin-top:14px">&larr; Volver</button>
       </div>
     </div>
   </section>
@@ -165,17 +167,29 @@
   </div>
 
 <script>
-// Usuarios de prueba. En producción esto sale de GET /api/usuarios
-// y el PIN se valida con POST /api/login.
-const USUARIOS = [
-  { id: 1, nombre: 'Lucas Pereyra',  rol: 'operador',   pin: '1234' },
-  { id: 2, nombre: 'Marina Gómez',   rol: 'operador',   pin: '1234' },
-  { id: 3, nombre: 'Diego Sosa',     rol: 'operador',   pin: '1234' },
-  { id: 4, nombre: 'Carla Ríos',     rol: 'operador',   pin: '1234' },
-  { id: 5, nombre: 'Javier Núñez',   rol: 'operador',   pin: '1234' },
-  { id: 6, nombre: 'Sofía Acosta',   rol: 'supervisor', pin: '1234' },
+// 🔌 BACKEND: en producción, ADMINS no vive acá — es una columna `admin`
+// (boolean) en la tabla `usuarios`, y la marcás vos con un UPDATE en la base.
+// Acá, para el prototipo, alcanza con la lista de mails.
+const ADMINS = [
+  'seba@fixy.com.ar',
+  // agregá acá el mail de cada admin que quieras que entre a Métricas
 ];
-let USUARIO = null;           // operador logueado
+
+// 🔌 BACKEND: esto reemplaza al array de USUARIOS con PIN. En producción:
+// POST /api/usuarios/login  Body: { email }
+// → si el mail no existe todavía, el backend lo auto-registra (200 con
+//   { nuevo:true }) y el frontend pide el nombre una sola vez y hace un
+//   segundo POST con { email, nombre } para completarlo.
+// Acá lo simulamos con localStorage para que el prototipo "recuerde" a
+// quién ya se registró entre recargas.
+function cargarUsuariosRegistrados(){
+  try{ return JSON.parse(localStorage.getItem('fixy_usuarios')||'[]'); }catch(e){ return []; }
+}
+function guardarUsuariosRegistrados(lista){
+  localStorage.setItem('fixy_usuarios', JSON.stringify(lista));
+}
+let USUARIOS_REGISTRADOS = cargarUsuariosRegistrados();
+let USUARIO = null;           // operador logueado: { id, nombre, email, admin }
 
 // Mock de despachos para probar la pantalla de métricas. En producción
 // sale de GET /api/metricas/despachos (mismo shape).
@@ -192,65 +206,66 @@ const DESPACHOS = [
 const iniciales = n => n.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
 
 function renderLogin(){
-  const ops = document.getElementById('ops'); ops.innerHTML='';
-  USUARIOS.forEach(u=>{
-    const b=document.createElement('div'); b.className='op';
-    b.innerHTML=`<div class="av">${iniciales(u.nombre)}</div><div class="nm">${u.nombre}</div><div class="rl">${u.rol}</div>`;
-    b.onclick=()=>pedirPin(u);
-    ops.appendChild(b);
-  });
-  document.getElementById('op-select').classList.remove('hidden');
-  document.getElementById('pin-panel').classList.add('hidden');
+  document.getElementById('email-input').value='';
+  document.getElementById('email-err').textContent='';
+  document.getElementById('email-panel').classList.remove('hidden');
+  document.getElementById('nombre-panel').classList.add('hidden');
+  document.getElementById('email-input').focus();
 }
 
-let pinUser=null, pinBuf='';
-function pedirPin(u){
-  pinUser=u; pinBuf='';
-  document.getElementById('op-select').classList.add('hidden');
-  document.getElementById('pin-panel').classList.remove('hidden');
-  document.getElementById('pin-who').textContent=u.nombre;
-  document.getElementById('pin-err').textContent='';
-  renderPinDots(); renderKeypad();
-}
-function renderPinDots(){
-  const d=document.getElementById('pin-dots'); d.innerHTML='';
-  for(let i=0;i<4;i++){ const x=document.createElement('div'); x.className='d'+(i<pinBuf.length?' on':''); d.appendChild(x); }
-}
-function renderKeypad(){
-  const k=document.getElementById('keypad'); k.innerHTML='';
-  ['1','2','3','4','5','6','7','8','9','C','0','OK'].forEach(t=>{
-    const b=document.createElement('button'); b.className='key'; b.textContent=t;
-    b.onclick=()=>pinTecla(t); k.appendChild(b);
-  });
-}
-function pinTecla(t){
-  if(t==='C'){ pinBuf=''; }
-  else if(t==='OK'){ validarPin(); return; }
-  else if(pinBuf.length<4){ pinBuf+=t; }
-  document.getElementById('pin-err').textContent='';
-  renderPinDots();
-  if(pinBuf.length===4) validarPin();
-}
-function validarPin(){
-  if(pinBuf===pinUser.pin){
-    USUARIO={ id:pinUser.id, nombre:pinUser.nombre, rol:pinUser.rol };
-    mostrarUsuarioEnCabecera();
-    if(USUARIO.rol==='supervisor'){
-      abrirMetricas();          // el supervisor cae directo en métricas
-    }else{
-      document.getElementById('crumb').textContent='Importar planillas del día';
-      mostrarVista('import');   // el operador va a despachar
-    }
+let emailPendiente=null;
+
+function validarEmail(){
+  const email = document.getElementById('email-input').value.trim().toLowerCase();
+  const errEl = document.getElementById('email-err');
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    errEl.textContent='Ingresá un mail válido.'; return;
+  }
+  errEl.textContent='';
+  const existente = USUARIOS_REGISTRADOS.find(u=>u.email===email);
+  if(existente){
+    entrarComo(existente);
   }else{
-    pinBuf=''; renderPinDots();
-    document.getElementById('pin-err').textContent='PIN incorrecto. Probá de nuevo.';
+    emailPendiente = email;
+    document.getElementById('email-panel').classList.add('hidden');
+    document.getElementById('nombre-panel').classList.remove('hidden');
+    document.getElementById('nombre-who').textContent = email;
+    document.getElementById('nombre-input').value='';
+    document.getElementById('nombre-err').textContent='';
+    document.getElementById('nombre-input').focus();
+  }
+}
+function confirmarNombre(){
+  const nombre = document.getElementById('nombre-input').value.trim();
+  if(!nombre){ document.getElementById('nombre-err').textContent='Falta el nombre.'; return; }
+  // 🔌 BACKEND: acá va POST /api/usuarios/login { email: emailPendiente, nombre }
+  const nuevo = {
+    id: USUARIOS_REGISTRADOS.length + 1,
+    email: emailPendiente,
+    nombre,
+    admin: ADMINS.includes(emailPendiente),
+  };
+  USUARIOS_REGISTRADOS.push(nuevo);
+  guardarUsuariosRegistrados(USUARIOS_REGISTRADOS);
+  entrarComo(nuevo);
+}
+function entrarComo(u){
+  // 🔌 BACKEND: acá va POST /api/usuarios/login { email: u.email } para
+  // usuarios que ya existen (el backend devuelve id, nombre y admin).
+  USUARIO = { id:u.id, nombre:u.nombre, email:u.email, admin: ADMINS.includes(u.email) || !!u.admin };
+  mostrarUsuarioEnCabecera();
+  if(USUARIO.admin){
+    abrirMetricas();          // el admin cae directo en métricas
+  }else{
+    document.getElementById('crumb').textContent='Importar planillas del día';
+    mostrarVista('import');   // el operador va a despachar
   }
 }
 function mostrarUsuarioEnCabecera(){ setHeader(''); }
 function userChipHtml(){
   if(!USUARIO) return '';
   return `<div class="userchip"><div class="av">${iniciales(USUARIO.nombre)}</div>`+
-    `<div><strong>${USUARIO.nombre}</strong></div>`+
+    `<div><strong>${USUARIO.nombre}</strong><div style="font-size:11px;opacity:.7">${USUARIO.email}</div></div>`+
     `<button id="logout">Salir</button></div>`;
 }
 // Pone contexto (izq) + chip de usuario (der) en la cabecera, sin perder al operador.
@@ -473,9 +488,9 @@ function abrirLista(planillas){
   mostrarVista('list');
   document.getElementById('crumb').textContent='Seleccioná una planilla';
   setHeader(`<div class="meta"><span>Importadas</span><strong>${PLANILLAS.length} planillas</strong></div>`);
-  // El acceso a métricas es solo para supervisores
+  // El acceso a métricas es solo para admins (lista ADMINS / columna admin en la base)
   document.getElementById('ver-metricas').style.display =
-    (USUARIO && USUARIO.rol==='supervisor') ? '' : 'none';
+    (USUARIO && USUARIO.admin) ? '' : 'none';
 }
 
 document.getElementById('reimport').onclick = ()=>{
@@ -724,6 +739,7 @@ document.getElementById('confirm').onclick=()=>{
   DESPACHOS.push({
     usuarioId: USUARIO?USUARIO.id:null,
     usuario: USUARIO?USUARIO.nombre:'—',
+    email: USUARIO?USUARIO.email:'—',
     planilla: hojaRuta.hojaId,
     transportista: hojaRuta.transportista||'Sin asignar',
     guias: totalGuias,
@@ -841,7 +857,7 @@ function exportarMetricas(){
     const inc=d.incidencias||[];
     const resumenInc = inc.map(i=> i.motivo ? `${i.tipo} ${i.code} (motivo: ${i.motivo})` : `${i.tipo} ${i.code}`).join(' | ');
     return {
-      Operador:d.usuario, Planilla:d.planilla, Fecha:d.fecha, Transportista:d.transportista||'',
+      Operador:d.usuario, Mail:d.email||'', Planilla:d.planilla, Fecha:d.fecha, Transportista:d.transportista||'',
       Guias:d.guias, Bultos:d.bultos, Tiempo:fmtDur(d.duracionSeg),
       'No asignados':d.noAsignados||0, 'Bultos sobrantes':d.bultoSobrante||0, 'Guías eliminadas':d.eliminadas||0,
       'Detalle de incidencias':resumenInc
@@ -872,7 +888,11 @@ function exportarMetricas(){
 
 renderLogin();
 mostrarVista('login');
-document.getElementById('pin-back').onclick=()=>{ pinBuf=''; renderLogin(); };
+document.getElementById('email-ok').onclick=()=>validarEmail();
+document.getElementById('email-input').addEventListener('keydown', e=>{ if(e.key==='Enter') validarEmail(); });
+document.getElementById('nombre-ok').onclick=()=>confirmarNombre();
+document.getElementById('nombre-input').addEventListener('keydown', e=>{ if(e.key==='Enter') confirmarNombre(); });
+document.getElementById('nombre-back').onclick=()=>renderLogin();
 </script>
 </body>
 </html>
