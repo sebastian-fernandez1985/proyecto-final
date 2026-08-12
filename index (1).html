@@ -170,6 +170,22 @@
 // 🔌 BACKEND: en producción, ADMINS no vive acá — es una columna `admin`
 // (boolean) en la tabla `usuarios`, y la marcás vos con un UPDATE en la base.
 // Acá, para el prototipo, alcanza con la lista de mails.
+// URL del Web App de Google Apps Script que escribe en el Google Sheet.
+// Queda visible en el navegador (cualquiera que abra las herramientas de
+// desarrollador la puede ver) — para un prototipo está bien, pero si esto
+// pasa a producción real conviene mover este envío detrás de un backend
+// propio con autenticación en vez de mandarlo directo desde el frontend.
+const FIXY_ENDPOINT = 'https://script.google.com/macros/s/AKfycbz8IGKZAmW6_JGcXSYhvCylgPhZy9w2MjzxmrvpOsv1cjeQY4uBzjzaG16yqCBfVxbFZQ/exec';
+
+function mandarAFixySheet(payload){
+  // text/plain evita el preflight OPTIONS que Apps Script no responde bien.
+  fetch(FIXY_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  }).catch(err => console.error('Error enviando a Sheets:', err));
+}
+
 const ADMINS = [
   'seba@fixy.com.ar',
   // agregá acá el mail de cada admin que quieras que entre a Métricas
@@ -247,6 +263,7 @@ function confirmarNombre(){
   };
   USUARIOS_REGISTRADOS.push(nuevo);
   guardarUsuariosRegistrados(USUARIOS_REGISTRADOS);
+  mandarAFixySheet({ tipo:'registro', mail: emailPendiente, admin: false });
   entrarComo(nuevo);
 }
 function entrarComo(u){
@@ -750,6 +767,17 @@ document.getElementById('confirm').onclick=()=>{
     fecha: new Date(fin).toLocaleDateString('es-AR'),
     noAsignados, eliminadas, bultoSobrante,
     incidencias: incidents.slice(), // historial completo (tipo, código, motivo, hora)
+  });
+  mandarAFixySheet({
+    tipo: 'metrica',
+    operador: USUARIO?USUARIO.nombre:'—',
+    mail: USUARIO?USUARIO.email:'—',
+    planilla: hojaRuta.hojaId,
+    transportista: hojaRuta.transportista||'Sin asignar',
+    guias: totalGuias,
+    bultos: bultosCtrl,
+    tiempo: duracionSeg,
+    fecha: new Date(fin).toISOString()
   });
 
   feedback('ok','&#10003;','Despacho confirmado',
