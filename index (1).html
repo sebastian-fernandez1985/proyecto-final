@@ -187,7 +187,7 @@ function mandarAFixySheet(payload){
 }
 
 const ADMINS = [
-  'seba@fixy.com.ar',
+  'sebastian.fernandez@fixy.com.ar',
   // agregá acá el mail de cada admin que quieras que entre a Métricas
 ];
 
@@ -207,17 +207,10 @@ function guardarUsuariosRegistrados(lista){
 let USUARIOS_REGISTRADOS = cargarUsuariosRegistrados();
 let USUARIO = null;           // operador logueado: { id, nombre, email, admin }
 
-// Mock de despachos para probar la pantalla de métricas. En producción
-// sale de GET /api/metricas/despachos (mismo shape).
-const _hoyAR = new Date().toLocaleDateString('es-AR');
-const _lunAR = inicioSemana(new Date()).toLocaleDateString('es-AR');
-const DESPACHOS = [
-  { usuarioId:1, usuario:'Lucas Pereyra', planilla:'57005', transportista:'Andreani',     guias:38, bultos:38, duracionSeg:512, fecha:_lunAR },
-  { usuarioId:1, usuario:'Lucas Pereyra', planilla:'57008', transportista:'OCA',          guias:41, bultos:43, duracionSeg:640, fecha:_hoyAR },
-  { usuarioId:2, usuario:'Marina Gómez',  planilla:'57006', transportista:'Andreani',     guias:35, bultos:36, duracionSeg:470, fecha:_lunAR },
-  { usuarioId:2, usuario:'Marina Gómez',  planilla:'57011', transportista:'Cruz del Sur', guias:52, bultos:55, duracionSeg:705, fecha:_hoyAR },
-  { usuarioId:3, usuario:'Diego Sosa',    planilla:'57009', transportista:'OCA',          guias:29, bultos:30, duracionSeg:388, fecha:_hoyAR },
-];
+// Despachos reales de la jornada. Arranca vacío: se va llenando con cada
+// despacho confirmado (ver DESPACHOS.push más abajo). En producción con
+// backend propio, esto saldría de GET /api/metricas/despachos.
+const DESPACHOS = [];
 
 const iniciales = n => n.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
 
@@ -777,14 +770,27 @@ document.getElementById('confirm').onclick=()=>{
     guias: totalGuias,
     bultos: bultosCtrl,
     tiempo: duracionSeg,
-    fecha: new Date(fin).toISOString()
+    fecha: new Date(fin).toISOString(),
+    noAsignados,
+    bultoSobrante,
+    eliminadas,
+    incidencias: incidents.map(i=> i.motivo ? `${i.tipo} ${i.code} (motivo: ${i.motivo})` : `${i.tipo} ${i.code}`).join(' | ')
   });
 
   feedback('ok','&#10003;','Despacho confirmado',
     `${hojaRuta.hojaId} · ${totalGuias} guías · ${bultosCtrl} bultos · ${USUARIO?USUARIO.nombre:''} · ${fmtDur(duracionSeg)} · ${new Date().toLocaleString('es-AR')}`);
   btn.classList.remove('ready'); btn.disabled=true; btn.textContent='DESPACHO CONFIRMADO ✓';
-  document.getElementById('gate').innerHTML='Auditoría registrada. <button class="link" id="goback">Volver a la lista</button>';
+  document.getElementById('gate').innerHTML=
+    'Auditoría registrada.<br><br>'+
+    '<button class="ctrl-btn" id="gonueva" style="width:auto;padding:12px 22px;margin-right:10px">Cargar otra planilla</button>'+
+    '<button class="ctrl-btn" id="goback" style="width:auto;padding:12px 22px;background:transparent">Volver a la lista</button>';
   document.getElementById('goback').onclick=()=>abrirLista();
+  document.getElementById('gonueva').onclick=()=>{
+    fileInput.value='';
+    document.getElementById('crumb').textContent='Importar planillas del día';
+    setHeader('');
+    mostrarVista('import');
+  };
 };
 
 document.getElementById('volver').onclick=()=>abrirLista();
