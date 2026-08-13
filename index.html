@@ -183,7 +183,16 @@ function mandarAFixySheet(payload){
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(payload)
-  }).catch(err => console.error('Error enviando a Sheets:', err));
+  })
+  .then(r => r.json())
+  .then(r => {
+    if(r && r.ok === false){
+      console.error('[FIXY] El Sheet rechazo el dato:', r.error, payload);
+    } else {
+      console.log('[FIXY] Guardado OK en el Sheet:', payload.tipo);
+    }
+  })
+  .catch(err => console.error('[FIXY] Error enviando a Sheets:', err, payload));
 }
 
 const ADMINS = [
@@ -774,7 +783,10 @@ document.getElementById('confirm').onclick=()=>{
     noAsignados,
     bultoSobrante,
     eliminadas,
-    incidencias: incidents.map(i=> i.motivo ? `${i.tipo} ${i.code} (motivo: ${i.motivo})` : `${i.tipo} ${i.code}`).join(' | ')
+    incidencias: incidents.map(i=> i.motivo ? `${i.tipo} ${i.code} (motivo: ${i.motivo})` : `${i.tipo} ${i.code}`).join(' | '),
+    // Detalle incidencia por incidencia: llena la pestana "incidencias" del Sheet,
+    // igual que la solapa Incidencias del Excel que se exporta desde Metricas.
+    incidenciasDetalle: incidents.map(i=>({ tipo:i.tipo, code:i.code, motivo:i.motivo||'', hora:i.hora }))
   });
 
   feedback('ok','&#10003;','Despacho confirmado',
